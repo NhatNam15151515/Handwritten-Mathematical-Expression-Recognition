@@ -1,0 +1,13 @@
+# Python cache
+__pycache__/
+
+# Checkpoints, logs, outputs
+checkpoints/
+logs/
+outputs/
+
+# Dữ liệu
+data/
+
+# Folder giấy tờ / tài liệu
+paper/
