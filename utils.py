@@ -10,11 +10,50 @@ from typing import List, Dict, Any, Optional
 try:
     from nltk.translate.bleu_score import corpus_bleu, sentence_bleu
 except ImportError:
-    # Fallback BLEU implementation
+    # Fallback BLEU implementation (uniform n-gram overlap up to 4)
+    def _simple_bleu(references, hypotheses, max_n=4):
+        def ngrams(tokens, n):
+            return [tuple(tokens[i:i+n]) for i in range(len(tokens)-n+1)]
+        scores = []
+        for hyp, refs in zip(hypotheses, references):
+            hyp_toks = hyp
+            ref_toks_list = [r[0] for r in refs]
+            if len(hyp_toks) == 0:
+                scores.append(0.0)
+                continue
+            precisions = []
+            for n in range(1, max_n+1):
+                hyp_ngrams = ngrams(hyp_toks, n)
+                if len(hyp_ngrams) == 0:
+                    precisions.append(0.0)
+                    continue
+                max_matches = 0
+                for ref_toks in ref_toks_list:
+                    ref_ngrams = ngrams(ref_toks, n)
+                    ref_counts = {}
+                    for g in ref_ngrams:
+                        ref_counts[g] = ref_counts.get(g, 0) + 1
+                    matches = 0
+                    used = {}
+                    for g in hyp_ngrams:
+                        if ref_counts.get(g, 0) > used.get(g, 0):
+                            matches += 1
+                            used[g] = used.get(g, 0) + 1
+                    max_matches = max(max_matches, matches)
+                precisions.append(max_matches / max(1, len(hyp_ngrams)))
+            # geometric mean
+            gm = 1.0
+            for p in precisions:
+                gm *= max(p, 1e-8)
+            gm = gm ** (1.0 / max_n)
+            scores.append(gm)
+        return sum(scores) / max(1, len(scores))
+
     def corpus_bleu(references, predictions):
-        return 0.0
+        # inputs are token lists already in calculate_bleu_score
+        return _simple_bleu(references, predictions)
     def sentence_bleu(references, prediction):
-        return 0.0
+        return _simple_bleu([references], [prediction])
 import matplotlib.pyplot as plt
 import cv2
 from PIL import Image

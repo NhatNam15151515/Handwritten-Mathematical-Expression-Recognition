@@ -1,245 +1,105 @@
-# Handwritten Mathematical Expression Recognition với Vision Transformer
+# Handwritten Mathematical Expression Recognition
 
-Hệ thống nhận dạng biểu thức toán học viết tay sử dụng mô hình Vision Transformer (ViT) với kiến trúc encoder-decoder.
+Hệ thống nhận dạng biểu thức toán học viết tay, được xây dựng bằng Python và PyTorch, sử dụng kiến trúc **Vision Transformer (ViT)** kết hợp với một **Transformer Decoder**. Mô hình này được thiết kế để chuyển đổi hình ảnh của các biểu thức toán học viết tay thành chuỗi LaTeX tương ứng.
 
 ## 🎯 Tính năng chính
 
-- **Vision Transformer Encoder**: Mã hóa ảnh thành sequence embeddings
-- **Transformer Decoder**: Sinh ra LaTeX sequence từ image features
-- **Data Augmentation**: Tăng cường dữ liệu với rotation, brightness, contrast
-- **Beam Search**: Tìm kiếm tối ưu cho inference
-- **Attention Visualization**: Trực quan hóa vùng chú ý của model
-- **BLEU Score Evaluation**: Đánh giá chất lượng với BLEU metric
+-   **Pre-trained Vision Transformer**: Sử dụng mô hình `vit-small-patch16-224` đã được huấn luyện trước trên ImageNet-21k làm bộ mã hóa (encoder), giúp trích xuất đặc trưng hình ảnh mạnh mẽ.
+-   **Transformer Decoder**: Sinh ra chuỗi LaTeX từ các đặc trưng hình ảnh đã được mã hóa.
+-   **Data Augmentation**: Tích hợp các kỹ thuật tăng cường dữ liệu on-the-fly (xoay, thay đổi độ sáng/tương phản) để cải thiện độ bền của mô hình.
+-   **Preprocessing Pipeline**: Cung cấp một pipeline tiền xử lý hiệu quả để chuẩn hóa và làm sạch dữ liệu đầu vào.
+-   **Beam Search Inference**: Tùy chọn sử dụng beam search để cải thiện chất lượng của chuỗi LaTeX được sinh ra.
+-   **Evaluation Metrics**: Đánh giá hiệu suất mô hình bằng các độ đo phổ biến như BLEU score và Edit Distance.
 
 ## 📁 Cấu trúc dự án
 
 ```
-├── data/                          # Dữ liệu training/testing
-│   ├── off_image_train/          # Ảnh training (8835 images)
-│   ├── off_image_test/           # Ảnh testing (986 images)
-│   ├── train_caption.txt         # LaTeX labels cho training
-│   ├── test_caption.txt          # LaTeX labels cho testing
-│   └── dictionary.txt            # Từ điển 112 tokens LaTeX
-├── config.py                     # Cấu hình model và training
-├── dataset.py                    # Dataset class và data loading
-├── model.py                      # Vision Transformer architecture
-├── train.py                      # Script training
-├── inference.py                  # Script inference và evaluation
-├── utils.py                      # Utility functions
-├── requirements.txt              # Dependencies
-├── checkpoints/                  # Model checkpoints
-├── logs/                         # Tensorboard logs
-└── outputs/                      # Kết quả inference
+.
+├── data/                     # Dữ liệu train_test
+├── config.py                 # File cấu hình tập trung cho toàn bộ dự án
+├── dataset.py                # Định nghĩa Dataset class và DataLoader
+├── debug_check_labels.py     # (Dev) Script kiểm tra nhãn dữ liệu
+├── debug_sanity_check.py     # (Dev) Script kiểm tra sự hợp lệ của một batch
+├── demo.py                   # Script chạy demo tương tác
+├── inference.py              # Script để thực thi nhận dạng & đánh giá
+├── model.py                  # Định nghĩa kiến trúc Vision Transformer
+├── preprocess.py             # Script để chạy pipeline tiền xử lý dữ liệu
+├── test_image.py             # Script đơn giản để test một ảnh đơn lẻ
+├── train.py                  # Script chính để huấn luyện mô hình
+├── utils.py                  # Các hàm và lớp tiện ích chung
+└── requirements.txt          # Danh sách các thư viện Python cần thiết
+
+# --- CÁC THƯ MỤC SAU SẼ ĐƯỢC TẠO TỰ ĐỘNG (NẾU CHƯA CÓ) ---
+# ├─- checkpoints/              # Model checkpoints (bị git ignore)
+# ├─- logs/                     # TensorBoard logs (bị git ignore)
+# └─- outputs/                  # Kết quả inference (bị git ignore)
 ```
 
-## ⚙️ Cài đặt
+## 🚀 Quy trình làm việc (Workflow)
 
-1. **Cài đặt dependencies:**
+Quy trình chuẩn để huấn luyện và sử dụng mô hình được chia thành 3 bước chính:
+
+### 1. Cài đặt Môi trường
+
+Đầu tiên, hãy chắc chắn rằng bạn đã cài đặt đầy đủ các thư viện cần thiết.
+
 ```bash
+# Cài đặt toàn bộ dependencies
 pip install -r requirements.txt
 ```
 
-2. **Kiểm tra dữ liệu:**
+### 2. Tiền xử lý Dữ liệu
+
+Trước khi huấn luyện, tất cả các ảnh trong bộ dữ liệu cần được xử lý (binarize, resize, padding) để đưa về một định dạng chuẩn. Quá trình này giúp tăng tốc độ training một cách đáng kể vì các tác vụ nặng đã được thực hiện trước.
+
+Chạy script sau để bắt đầu:
+
 ```bash
-python dataset.py
+# Script này sẽ đọc ảnh từ off_image_*, xử lý và lưu vào *_processed/
+python preprocess.py
 ```
 
-## 🚀 Training
+### 3. Huấn luyện Mô hình
 
-### Cấu hình Model
-- **Image Size**: 224x224
-- **Patch Size**: 16x16 (196 patches)
-- **Embed Dim**: 768
-- **Encoder Layers**: 12
-- **Decoder Layers**: 6
-- **Attention Heads**: 12
-- **Max Sequence Length**: 256 tokens
+Sau khi dữ liệu đã được tiền xử lý, bạn có thể bắt đầu quá trình huấn luyện.
 
-### Bắt đầu training:
 ```bash
+# Bắt đầu training, Dataloader sẽ đọc trực tiếp từ thư mục *_processed/
 python train.py
 ```
 
-### Các tham số training chính:
-- **Batch Size**: 16
-- **Learning Rate**: 1e-4 (với CosineAnnealingLR)
-- **Weight Decay**: 1e-4
-- **Gradient Clipping**: 1.0
-- **Epochs**: 100
+-   **Theo dõi quá trình training**: Sử dụng TensorBoard để xem các biểu đồ loss, accuracy, và learning rate.
+    ```bash
+    tensorboard --logdir logs
+    ```
+-   Checkpoints của mô hình sẽ được tự động lưu vào thư mục `checkpoints/`.
 
-### Theo dõi training:
+## 🔍 Inference (Dự đoán)
+
+Sử dụng script `inference.py` để nhận dạng biểu thức trên một ảnh mới hoặc trên toàn bộ tập test.
+
+### Nhận dạng trên một ảnh đơn lẻ
+
 ```bash
-tensorboard --logdir logs
+python inference.py --checkpoint checkpoints/best.pth --image path/to/your/image.bmp
 ```
 
-## 🔍 Inference
+### Đánh giá trên toàn bộ tập Test
 
-### Nhận dạng ảnh đơn lẻ:
-```bash
-python inference.py --checkpoint checkpoints/best.pth --image path/to/image.bmp --visualize
-```
-
-### Batch processing:
-```bash
-python inference.py --checkpoint checkpoints/best.pth --image_dir data/off_image_test --output_dir outputs
-```
-
-### Đánh giá trên test set:
 ```bash
 python inference.py --checkpoint checkpoints/best.pth --evaluate
 ```
 
-### Beam search inference:
-```bash
-python inference.py --checkpoint checkpoints/best.pth --image image.bmp --beam_size 5 --temperature 0.8
-```
+## ⚙️ Tùy chỉnh và Cấu hình
 
-## 📊 Kiến trúc Model
+Toàn bộ các tham số quan trọng của mô hình và quá trình huấn luyện được quản lý tập trung tại `config.py`. Bạn có thể dễ dàng thay đổi các giá trị như:
 
-### Vision Transformer Encoder
-```python
-Input Image (224x224x3)
-    ↓
-Patch Embedding (196x768)
-    ↓
-+ Position Embedding
-    ↓
-12x Transformer Blocks
-    ↓
-Layer Norm
-    ↓
-Visual Features (197x768)  # +1 for CLS token
-```
-
-### Transformer Decoder
-```python
-LaTeX Tokens
-    ↓
-Token Embedding (768)
-    ↓
-+ Positional Encoding
-    ↓
-6x Decoder Blocks (Self-Attention + Cross-Attention)
-    ↓
-Layer Norm
-    ↓
-Linear Head (vocab_size)
-    ↓
-LaTeX Sequence
-```
-
-## 📈 Metrics và Evaluation
-
-- **Cross-Entropy Loss**: Với ignore padding tokens
-- **Token Accuracy**: Accuracy trên từng token (loại trừ padding)
-- **BLEU Score**: Đánh giá chất lượng sequence generation
-- **Edit Distance**: Khoảng cách chỉnh sửa giữa prediction và target
-
-## 🎨 Data Augmentation
-
-- **Rotation**: ±5 degrees
-- **Brightness**: ±20%
-- **Contrast**: ±20%
-- **Gaussian Noise**: Thêm noise ngẫu nhiên
-- **Normalization**: ImageNet statistics
-
-## 💡 Tối ưu hóa
-
-### Memory Optimization:
-- Gradient checkpointing (có thể thêm)
-- Mixed precision training (có thể thêm)
-- Efficient attention mechanisms
-
-### Speed Optimization:
-- DataLoader với num_workers=4
-- Pin memory cho GPU
-- Batch processing cho inference
-
-## 📝 Ví dụ sử dụng
-
-```python
-from inference import MathExpressionInference
-from pathlib import Path
-
-# Load model
-inference = MathExpressionInference(Path("checkpoints/best.pth"))
-
-# Predict single image
-latex, tokens, confidence = inference.predict(Path("image.bmp"))
-print(f"LaTeX: {latex}")
-print(f"Confidence: {confidence.mean():.3f}")
-
-# Visualize prediction
-inference.visualize_prediction(Path("image.bmp"), save_path=Path("result.png"))
-```
-
-## 🔧 Tùy chỉnh
-
-### Thay đổi cấu hình trong `config.py`:
-```python
-# Model parameters
-IMAGE_SIZE = 224
-PATCH_SIZE = 16
-EMBED_DIM = 768
-NUM_LAYERS = 12
-
-# Training parameters  
-BATCH_SIZE = 16
-LEARNING_RATE = 1e-4
-NUM_EPOCHS = 100
-```
-
-### Thêm augmentation mới trong `dataset.py`:
-```python
-A.ElasticTransform(p=0.2),
-A.GridDistortion(p=0.2),
-A.OpticalDistortion(p=0.2)
-```
-
-## 📊 Kết quả mong đợi
-
-Với dataset hiện tại (8835 train + 986 test samples):
-- **Training Accuracy**: ~85-95%
-- **Validation Accuracy**: ~80-90%
-- **BLEU Score**: ~0.6-0.8
-- **Training Time**: ~10-20 giờ trên GPU
-
-## 🐛 Troubleshooting
-
-### Memory issues:
-- Giảm `BATCH_SIZE` trong config
-- Giảm `IMAGE_SIZE` hoặc `EMBED_DIM`
-
-### Convergence issues:
-- Giảm `LEARNING_RATE`
-- Tăng `WARMUP_STEPS`
-- Kiểm tra data quality
-
-### Inference issues:
-- Kiểm tra image format (BMP, PNG, JPG)
-- Đảm bảo image không bị corrupt
-- Kiểm tra vocabulary consistency
-
-## 📚 Tài liệu tham khảo
-
-- [Vision Transformer (ViT)](https://arxiv.org/abs/2010.11929)
-- [Attention Is All You Need](https://arxiv.org/abs/1706.03762)
-- [Mathematical Expression Recognition](https://arxiv.org/abs/2207.04410)
-
-## 🤝 Đóng góp
-
-1. Fork repository
-2. Tạo feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to branch (`git push origin feature/AmazingFeature`)
-5. Tạo Pull Request
-
-## 📄 License
-
-Dự án này được phân phối dưới MIT License. Xem `LICENSE` file để biết thêm chi tiết.
+-   `IMAGE_SIZE`, `PATCH_SIZE`
+-   `EMBED_DIM`, `ENCODER_LAYERS`, `DECODER_LAYERS`
+-   `BATCH_SIZE`, `LEARNING_RATE`, `NUM_EPOCHS`
 
 ---
 
-**Lưu ý**: Đây là implementation cho mục đích nghiên cứu và học tập. Để sử dụng trong production, cần thêm các tối ưu hóa về performance và robustness.
+*Dự án này được phát triển cho mục đích nghiên cứu và học tập. Để triển khai trong môi trường production, có thể cần thêm các tối ưu hóa về hiệu suất và độ tin cậy.*
 
 
