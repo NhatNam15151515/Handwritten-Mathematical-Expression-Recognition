@@ -16,5 +16,7 @@ data/train_processed/
 paper/
 
 # SpecStory explanation file
+.specstory/history/
+.cursorindexingignore
+# SpecStory explanation file
 .specstory/.what-is-this.md
-.cursorindexingignore/
