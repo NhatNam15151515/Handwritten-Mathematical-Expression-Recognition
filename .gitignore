@@ -8,9 +8,9 @@ outputs/
 
 # Dữ liệu
 data/
-preprocess.py/
 
 # Folder giấy tờ / tài liệu
 paper/
 # SpecStory explanation file
-.specstory/.what-is-this.md
+.specstory/
+.cursorindexingignore/
