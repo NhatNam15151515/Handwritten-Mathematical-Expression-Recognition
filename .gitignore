@@ -1,0 +1,20 @@
+# Python cache
+__pycache__/
+
+# Checkpoints, logs, outputs
+checkpoints/
+logs/
+outputs/
+
+# Dữ liệu
+data/off_image_test/
+data/off_image_train/
+data/test_processed/
+data/train_processed/
+
+# Folder giấy tờ / tài liệu
+paper/
+
+# SpecStory explanation file
+.specstory/.what-is-this.md
+.cursorindexingignore/
