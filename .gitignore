@@ -17,4 +17,5 @@ paper/
 
 # SpecStory explanation file
 .specstory/history
+.specstory/
 .cursorindexingignore
