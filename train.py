@@ -8,6 +8,7 @@ import time
 from tqdm import tqdm
 import numpy as np
 from typing import Dict
+import csv
 
 from config import Config
 from dataset import create_dataloaders
@@ -18,7 +19,7 @@ class Trainer:
     def __init__(self, config: Config):
         self.config = config
         self.device = config.DEVICE
-        self.train_loader, self.test_loader = create_dataloaders(config)
+        self.train_loader, self.val_loader = create_dataloaders(config)
 
         self.vocab_size = len(self.train_loader.dataset.vocab)
         self.vocab = self.train_loader.dataset.vocab
@@ -30,11 +31,25 @@ class Trainer:
             ignore_index=self.vocab[config.PAD_TOKEN],
             label_smoothing=config.LABEL_SMOOTHING
         )
+        encoder_params = self.model.vision_encoder.parameters()
+        decoder_params = [
+            {'params': self.model.encoder_projection.parameters()},
+            {'params': self.model.text_decoder.parameters()}
+        ]
+
+        # Tạo danh sách các nhóm tham số cho optimizer
+        param_groups = [
+            {'params': list(encoder_params), 'lr': config.ENCODER_LR},
+            {'params': [p for group in decoder_params for p in group['params']], 'lr': config.DECODER_LR}
+        ]
+
+        print(f"Optimizer: Using differential LR -> Encoder LR: {config.ENCODER_LR}, Decoder LR: {config.DECODER_LR}")
+
         self.optimizer = optim.AdamW(
-            self.model.parameters(),
-            lr=config.LEARNING_RATE,
+            param_groups,  # Truyền các nhóm tham số đã được định nghĩa
             weight_decay=config.WEIGHT_DECAY
         )
+
         self.scheduler = CosineAnnealingLR(
             self.optimizer,
             T_max=config.NUM_EPOCHS,
@@ -46,8 +61,42 @@ class Trainer:
         self.best_bleu = 0.0
         self.best_loss = float('inf')
 
+        self._init_history_log()
+
         print(f"Model created with {sum(p.numel() for p in self.model.parameters()):,} parameters")
         print(f"Training on {self.device}")
+
+    def _init_history_log(self):
+        """Khởi tạo file log để ghi lại lịch sử huấn luyện."""
+        self.history_log_path = self.config.LOG_DIR / f"train_history_{int(time.time())}.csv"
+
+        # Tự động trích xuất các siêu tham số từ config
+        hyperparams = {}
+        for k in dir(self.config):
+            if not k.startswith('_'):
+                v = getattr(self.config, k)
+                if isinstance(v, (int, float, str, bool)):
+                    hyperparams[k] = v
+        
+        self.hyperparam_keys = sorted(hyperparams.keys())
+        self.hyperparam_values = [hyperparams[k] for k in self.hyperparam_keys]
+
+        try:
+            self.history_file = open(self.history_log_path, 'w', newline='', encoding='utf-8')
+            self.history_writer = csv.writer(self.history_file)
+            
+            # Tạo header với các siêu tham số
+            headers = [
+                'epoch', 'train_loss', 'train_accuracy',
+                'val_loss', 'val_accuracy', 'val_bleu',
+                'encoder_lr', 'decoder_lr'
+            ] + self.hyperparam_keys
+
+            self.history_writer.writerow(headers)
+            print(f"Lịch sử huấn luyện sẽ được ghi vào: {self.history_log_path}")
+        except IOError as e:
+            print(f"Lỗi: Không thể mở file log lịch sử. {e}")
+            self.history_file = None
 
     def train_epoch(self) -> Dict[str, float]:
         self.model.train()
@@ -92,7 +141,7 @@ class Trainer:
         all_predictions, all_targets = [], []
 
         with torch.no_grad():
-            pbar = tqdm(self.test_loader, desc="[Evaluating]")
+            pbar = tqdm(self.val_loader, desc="[Evaluating]")
             for batch in pbar:
                 images = batch['image'].to(self.device)
                 input_seq = batch['input_seq'].to(self.device)
@@ -135,18 +184,59 @@ class Trainer:
     def generate_samples(self, num_samples: int = 5):
         self.model.eval()
         with torch.no_grad():
-            batch = next(iter(self.test_loader))
+            try:
+                batch = next(iter(self.val_loader))
+            except StopIteration:
+                print("Không thể lấy batch từ val_loader để tạo mẫu.")
+                return
             images = batch['image'][:num_samples].to(self.device)
             captions = batch['caption'][:num_samples]
 
+            # Lấy số lượng mẫu thực tế có trong batch này
+            actual_batch_size = images.size(0)
+
+            # Nếu không có mẫu nào thì dừng lại
+            if actual_batch_size == 0:
+                print("Không có mẫu nào trong batch để tạo.")
+                return
+
+            # Tạo chuỗi dự đoán
             generated = self.model.generate(
                 images, self.vocab[self.config.SOS_TOKEN], self.vocab[self.config.EOS_TOKEN],
                 max_length=self.config.MAX_SEQ_LENGTH
             )
 
-            print("\n" + "="*80 + "\nSAMPLE PREDICTIONS:\n" + "="*80)
-            for i in range(num_samples):
-                print(f"\nSample {i+1}:\nTarget:     {captions[i]}\nPredicted:  {self._indices_to_tokens(generated[i].cpu().numpy())}\n" + "-" * 60)
+            print("\n" + "=" * 80 + "\nSAMPLE PREDICTIONS:\n" + "=" * 80)
+
+            # Chạy vòng lặp dựa trên số lượng mẫu THỰC TẾ
+            for i in range(actual_batch_size):
+                # Dòng này bây giờ sẽ hoàn toàn an toàn
+                print(
+                    f"\nSample {i + 1}:\nTarget:     {captions[i]}\nPredicted:  {self._indices_to_tokens(generated[i].cpu().numpy())}\n" + "-" * 60)
+
+    def _log_epoch_history(self, epoch: int, train_metrics: Dict, eval_metrics: Dict):
+        """Ghi lại thông số của một epoch vào file log."""
+        if self.history_file:
+            try:
+                encoder_lr = self.optimizer.param_groups[0]['lr']
+                decoder_lr = self.optimizer.param_groups[1]['lr']
+
+                # Thêm giá trị siêu tham số vào mỗi dòng
+                row = [
+                    epoch + 1,
+                    train_metrics['loss'],
+                    train_metrics['accuracy'],
+                    eval_metrics['loss'],
+                    eval_metrics['accuracy'],
+                    eval_metrics['bleu'],
+                    encoder_lr,
+                    decoder_lr
+                ] + self.hyperparam_values
+                
+                self.history_writer.writerow(row)
+                self.history_file.flush()
+            except IOError as e:
+                print(f"Lỗi: Không thể ghi vào file log lịch sử. {e}")
 
     def train(self):
         print(f"\nBắt đầu huấn luyện trong {self.config.NUM_EPOCHS} epochs...")
@@ -154,6 +244,9 @@ class Trainer:
             self.epoch = epoch
             train_metrics = self.train_epoch()
             eval_metrics = self.evaluate()
+            
+            self._log_epoch_history(epoch, train_metrics, eval_metrics)
+            
             self.scheduler.step()
 
             print(f"\nEpoch {epoch+1}/{self.config.NUM_EPOCHS}:\n"
@@ -172,6 +265,10 @@ class Trainer:
             if (epoch + 1) % 10 == 0: self.generate_samples()
 
         print(f"\nHoàn tất huấn luyện! Best BLEU: {self.best_bleu:.4f}")
+
+        if self.history_file:
+            self.history_file.close()
+            print(f"Đã lưu lịch sử huấn luyện vào {self.history_log_path}")
 
 def main():
     config = Config()

@@ -78,19 +78,23 @@ class AverageMeter:
 def calculate_bleu_score(predictions: List[str], references: List[List[str]]) -> float:
     """Calculate BLEU score for predictions"""
     try:
-        # Convert strings to token lists
-        pred_tokens = [pred.split() for pred in predictions]
-        ref_tokens = [[ref[0].split() for ref in ref_list] for ref_list in references]
-        
-        # Flatten reference tokens
-        ref_tokens_flat = []
-        for ref_list in ref_tokens:
-            ref_tokens_flat.append([ref for ref in ref_list])
-        
-        # Calculate BLEU score
-        bleu = corpus_bleu(ref_tokens_flat, pred_tokens)
+        # Chuyển các chuỗi dự đoán thành list các token
+        hypotheses = [p.split() for p in predictions]
+
+        # Chuyển các chuỗi tham chiếu thành định dạng NLTK mong muốn
+        # (list of sentences, where each sentence is a list of references,
+        # and each reference is a list of tokens)
+        list_of_references = []
+        for ref_list in references:
+            # Mỗi câu chỉ có 1 tham chiếu, nhưng nltk cần nó nằm trong 1 list nữa
+            list_of_references.append([r.split() for r in ref_list])
+
+        # Tính toán điểm BLEU-4 (mặc định)
+        bleu = corpus_bleu(list_of_references, hypotheses)
         return bleu
-    except:
+    except Exception as e:
+        # In lỗi ra để debug nếu có vấn đề
+        print(f"Lỗi khi tính BLEU: {e}")
         return 0.0
 
 def save_checkpoint(state: Dict[str, Any], is_best: bool, checkpoint_dir: Path):

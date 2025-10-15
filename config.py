@@ -10,8 +10,11 @@ class Config:
     DATA_DIR = Path("./data")
     TRAIN_IMAGE_DIR = DATA_DIR / "off_image_train"
     TEST_IMAGE_DIR = DATA_DIR / "off_image_test"
+
     TRAIN_CAPTION_FILE = DATA_DIR / "train_caption.txt"
     TEST_CAPTION_FILE = DATA_DIR / "test_caption.txt"
+    VAL_CAPTION_FILE = DATA_DIR / "val_caption.txt"
+
     DICTIONARY_FILE = DATA_DIR / "dictionary.txt"
     TRAIN_PROCESSED_IMAGE_DIR = DATA_DIR / "train_processed"
     TEST_PROCESSED_IMAGE_DIR = DATA_DIR / "test_processed"
@@ -21,10 +24,10 @@ class Config:
     PATCH_SIZE = 16            # Ít patch hơn (18x18 grid), nhanh hơn
     EMBED_DIM = 256           # Giữ embedding vừa phải
     NUM_HEADS = 8
-    NUM_LAYERS = 2             # Encoder 4, decoder ~2-3 (đã set trong model)
+    NUM_LAYERS = 4             # Encoder 4, decoder ~2-3 (đã set trong model)
     MLP_RATIO = 4.0
-    DROPOUT = 0.35            # Tăng nhẹ để giảm overfit
-    ATTENTION_DROPOUT = 0.25   # Tăng nhẹ để regularize
+    DROPOUT = 0.4            # Tăng nhẹ để giảm overfit
+    ATTENTION_DROPOUT = 0.3 # Tăng nhẹ để regularize
     APPLY_PREPROCESSING = True
 
     # Sequence parameters
@@ -35,11 +38,12 @@ class Config:
     UNK_TOKEN = "<UNK>"
 
     # Training parameters
-    BATCH_SIZE = 6             # Điều chỉnh theo VRAM
-    ACCUMULATION_STEPS = 3     # Tăng tích lũy để batch hiệu quả lớn hơn
-    LEARNING_RATE = 1.5e-4       # Học nhanh hơn một chút, có cosine warmup
+    BATCH_SIZE = 4             # Điều chỉnh theo VRAM
+    ACCUMULATION_STEPS = 4     # Tăng tích lũy để batch hiệu quả lớn hơn
+    ENCODER_LR = 2e-5  # LR rất thấp cho encoder pre-trained
+    DECODER_LR = 3e-4  # LR cao hơn cho các lớp mới (decoder)
     MIN_LR = 1e-6
-    WEIGHT_DECAY = 2e-4        # Nhẹ hơn để tránh quá regularize với dropout
+    WEIGHT_DECAY = 5e-4        # Nhẹ hơn để tránh quá regularize với dropout
     NUM_EPOCHS = 60            # Thêm epoch để BLEU lên đều (nhanh/epoch)
     WARMUP_EPOCHS = 4
     GRADIENT_CLIP = 0.6
@@ -62,13 +66,13 @@ class Config:
 
     # Data augmentation
     AUGMENT_PROB = 0.9
-    ROTATION_RANGE = 12
+    ROTATION_RANGE = 15
     SCALE_RANGE = (0.9, 1.1)
     TRANSLATION_RANGE = 0.05
     SHEAR_RANGE = 5
-    BRIGHTNESS_RANGE = 0.35
-    CONTRAST_RANGE = 0.35
-    NOISE_PROB = 0.2
+    BRIGHTNESS_RANGE = 0.4
+    CONTRAST_RANGE = 0.4
+    NOISE_PROB = 0.3
     BLUR_PROB = 0.1
 
     # Regularization
@@ -89,14 +93,11 @@ class Config:
     STEP_SIZE = 30
     GAMMA = 0.5
 
-    # Dataset split
-    TRAIN_SPLIT = 0.85  # 85% cho training
-    VAL_SPLIT = 0.15   # 15% cho validation
 
     # Memory optimization
     GRADIENT_CHECKPOINTING = True  # Tiết kiệm memory
     PIN_MEMORY = True              # Tăng tốc copy H2D
-    NUM_WORKERS = 2               # 4 worker cho 1660S hợp lý
+    NUM_WORKERS = 4               # 4 worker cho 1660S hợp lý
 
     def __repr__(self):
         return (f"Config(device={self.DEVICE}, batch_size={self.BATCH_SIZE}, "
@@ -118,7 +119,8 @@ class Config:
         print(f"Number of Layers: {self.NUM_LAYERS}")
         print(f"Number of Heads: {self.NUM_HEADS}")
         print(f"Batch Size: {self.BATCH_SIZE} (Effective: {self.get_effective_batch_size()})")
-        print(f"Learning Rate: {self.LEARNING_RATE}")
+        print(f"Learning Rate encoder: {self.ENCODER_LR}")
+        print(f"Learning Rate decoder: {self.DECODER_LR}")
         print(f"Number of Epochs: {self.NUM_EPOCHS}")
         print(f"Mixed Precision: {self.USE_MIXED_PRECISION}")
         print(f"Gradient Checkpointing: {self.GRADIENT_CHECKPOINTING}")

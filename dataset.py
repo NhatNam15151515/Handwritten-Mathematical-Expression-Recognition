@@ -130,35 +130,46 @@ def _pad_collate_fn(batch):
 
 
 def create_dataloaders(config: Config) -> Tuple[DataLoader, DataLoader]:
-    print("Tạo dataloader từ dữ liệu ĐÃ TIỀN XỬ LÝ.")
-
     train_dataset = MathExpressionDataset(
-        # THAY ĐỔI: Sử dụng thư mục ảnh đã xử lý
         processed_image_dir=config.TRAIN_PROCESSED_IMAGE_DIR,
         caption_file=config.TRAIN_CAPTION_FILE,
         dictionary_file=config.DICTIONARY_FILE,
         is_train=True
     )
-    test_dataset = MathExpressionDataset(
-        # THAY ĐỔI: Sử dụng thư mục ảnh đã xử lý
-        processed_image_dir=config.TEST_PROCESSED_IMAGE_DIR,
-        caption_file=config.TEST_CAPTION_FILE,
+
+    val_dataset = MathExpressionDataset(
+        processed_image_dir=config.TRAIN_PROCESSED_IMAGE_DIR,
+        caption_file=config.VAL_CAPTION_FILE,
         dictionary_file=config.DICTIONARY_FILE,
         is_train=False
     )
+
+    # test_dataset = MathExpressionDataset(
+    #     processed_image_dir=config.TEST_PROCESSED_IMAGE_DIR,
+    #     caption_file=config.TEST_CAPTION_FILE,
+    #     dictionary_file=config.DICTIONARY_FILE,
+    #     is_train=False
+    # )
+    # test_loader = DataLoader(
+    #     test_dataset, batch_size=config.BATCH_SIZE, shuffle=False,
+    #     num_workers=config.NUM_WORKERS, pin_memory=config.PIN_MEMORY,
+    #     collate_fn=_pad_collate_fn
+    # )
 
     train_loader = DataLoader(
         train_dataset, batch_size=config.BATCH_SIZE, shuffle=True,
         num_workers=config.NUM_WORKERS, pin_memory=config.PIN_MEMORY, drop_last=True,
         collate_fn=_pad_collate_fn
     )
-    test_loader = DataLoader(
-        test_dataset, batch_size=config.BATCH_SIZE, shuffle=False,
+
+
+    val_loader = DataLoader(
+        val_dataset, batch_size=config.BATCH_SIZE, shuffle=False,
         num_workers=config.NUM_WORKERS, pin_memory=config.PIN_MEMORY,
         collate_fn=_pad_collate_fn
     )
 
-    return train_loader, test_loader
+    return train_loader, val_loader
 
 
 def visualize_preprocessing(image_path, config):
