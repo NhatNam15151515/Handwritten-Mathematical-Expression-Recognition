@@ -29,7 +29,6 @@ class MathExpressionDataset(Dataset):
         # Transform chỉ bao gồm augmentation, không còn resize
         self.transform = self._get_transform()
 
-    # CÁC HÀM HELPER GIỮ NGUYÊN
     def _load_vocabulary(self, dictionary_file: Path) -> Dict[str, int]:
         vocab = {Config.PAD_TOKEN: 0, Config.SOS_TOKEN: 1, Config.EOS_TOKEN: 2, Config.UNK_TOKEN: 3}
         with open(dictionary_file, 'r', encoding='utf-8') as f:
@@ -138,7 +137,7 @@ def create_dataloaders(config: Config) -> Tuple[DataLoader, DataLoader]:
     )
 
     val_dataset = MathExpressionDataset(
-        processed_image_dir=config.TRAIN_PROCESSED_IMAGE_DIR,
+        processed_image_dir=config.VAL_PROCESSED_IMAGE_DIR,
         caption_file=config.VAL_CAPTION_FILE,
         dictionary_file=config.DICTIONARY_FILE,
         is_train=False

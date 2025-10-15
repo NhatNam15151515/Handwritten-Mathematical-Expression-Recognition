@@ -2,16 +2,19 @@
 __pycache__/
 
 # Checkpoints, logs, outputs
-checkpoints/
+checkpoints/*.pth
+checkpoints/*.pt
+checkpoints/*.ckpt
 logs/
 outputs/
 
 # Dữ liệu
-data/off_image_test/
-data/off_image_train/
 data/test_processed/
 data/train_processed/
-
+data/val_processed
+data/test_image
+data/train_image
+data/val_image
 # Folder giấy tờ / tài liệu
 paper/
 

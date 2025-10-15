@@ -120,7 +120,8 @@ def main():
     # Cấu hình các thư mục
     datasets_to_process = {
         "train": (config.TRAIN_IMAGE_DIR, config.TRAIN_CAPTION_FILE, config.TRAIN_PROCESSED_IMAGE_DIR),
-        "test": (config.TEST_IMAGE_DIR, config.TEST_CAPTION_FILE, config.TEST_PROCESSED_IMAGE_DIR)
+        "test": (config.TEST_IMAGE_DIR, config.TEST_CAPTION_FILE, config.TEST_PROCESSED_IMAGE_DIR),
+        "val": (config.VAL_PROCESSED_IMAGE_DIR, config.VAL_CAPTION_FILE, config.VAL_PROCESSED_IMAGE_DIR),
     }
 
     for name, (source_dir, caption_file, dest_dir) in datasets_to_process.items():

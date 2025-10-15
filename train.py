@@ -240,6 +240,7 @@ class Trainer:
 
     def train(self):
         print(f"\nBắt đầu huấn luyện trong {self.config.NUM_EPOCHS} epochs...")
+        patience_counter = 0
         for epoch in range(self.config.NUM_EPOCHS):
             self.epoch = epoch
             train_metrics = self.train_epoch()
@@ -255,17 +256,28 @@ class Trainer:
                   f"Val BLEU: {eval_metrics['bleu']:.4f}")
 
             is_best = eval_metrics['bleu'] > self.best_bleu
-            if is_best: self.best_bleu = eval_metrics['bleu']
-
+            if is_best:
+                self.best_bleu = eval_metrics['bleu']
+                patience_counter = 0
+            else:
+                patience_counter += 1
+ 
             save_checkpoint({
-                'epoch': epoch + 1, 'model_state_dict': self.model.state_dict(),
-                'optimizer_state_dict': self.optimizer.state_dict(), 'best_bleu': self.best_bleu
+                'epoch': epoch + 1,
+                'model_state_dict': self.model.state_dict(),
+                'optimizer_state_dict': self.optimizer.state_dict(),
+                'best_bleu': self.best_bleu,
+                'vocab': self.vocab
             }, is_best, self.config.CHECKPOINT_DIR)
-
+ 
             if (epoch + 1) % 10 == 0: self.generate_samples()
-
+ 
+            if patience_counter >= self.config.EARLY_STOPPING_PATIENCE:
+                print(f"\nEarly stopping sau {epoch + 1} epochs vì không có cải thiện trong {self.config.EARLY_STOPPING_PATIENCE} epochs.")
+                break
+ 
         print(f"\nHoàn tất huấn luyện! Best BLEU: {self.best_bleu:.4f}")
-
+ 
         if self.history_file:
             self.history_file.close()
             print(f"Đã lưu lịch sử huấn luyện vào {self.history_log_path}")

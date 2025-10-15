@@ -8,8 +8,9 @@ from pathlib import Path
 class Config:
     # Dataset paths
     DATA_DIR = Path("./data")
-    TRAIN_IMAGE_DIR = DATA_DIR / "off_image_train"
-    TEST_IMAGE_DIR = DATA_DIR / "off_image_test"
+    TRAIN_IMAGE_DIR = DATA_DIR / "train_image"
+    TEST_IMAGE_DIR = DATA_DIR / "test_image"
+    VAL_IMAGE_DIR = DATA_DIR / "val_image"
 
     TRAIN_CAPTION_FILE = DATA_DIR / "train_caption.txt"
     TEST_CAPTION_FILE = DATA_DIR / "test_caption.txt"
@@ -18,6 +19,7 @@ class Config:
     DICTIONARY_FILE = DATA_DIR / "dictionary.txt"
     TRAIN_PROCESSED_IMAGE_DIR = DATA_DIR / "train_processed"
     TEST_PROCESSED_IMAGE_DIR = DATA_DIR / "test_processed"
+    VAL_PROCESSED_IMAGE_DIR = DATA_DIR / "val_processed"
 
     # Model parameters
     IMAGE_SIZE = 224
@@ -36,10 +38,11 @@ class Config:
     SOS_TOKEN = "<SOS>"
     EOS_TOKEN = "<EOS>"
     UNK_TOKEN = "<UNK>"
+    IN_CHANNELS = 1
 
     # Training parameters
-    BATCH_SIZE = 4             # Điều chỉnh theo VRAM
-    ACCUMULATION_STEPS = 4     # Tăng tích lũy để batch hiệu quả lớn hơn
+    BATCH_SIZE = 6             # Điều chỉnh theo VRAM
+    ACCUMULATION_STEPS = 3    # Tăng tích lũy để batch hiệu quả lớn hơn
     ENCODER_LR = 2e-5  # LR rất thấp cho encoder pre-trained
     DECODER_LR = 3e-4  # LR cao hơn cho các lớp mới (decoder)
     MIN_LR = 1e-6
@@ -67,13 +70,13 @@ class Config:
     # Data augmentation
     AUGMENT_PROB = 0.9
     ROTATION_RANGE = 15
-    SCALE_RANGE = (0.9, 1.1)
-    TRANSLATION_RANGE = 0.05
+    SCALE_RANGE = (0.85, 1.15)
+    TRANSLATION_RANGE = 0.1
     SHEAR_RANGE = 5
     BRIGHTNESS_RANGE = 0.4
     CONTRAST_RANGE = 0.4
-    NOISE_PROB = 0.3
-    BLUR_PROB = 0.1
+    NOISE_PROB = 0.4
+    BLUR_PROB = 0.3
 
     # Regularization
     LABEL_SMOOTHING = 0.1      # Dùng với CE để giảm overfit
@@ -86,7 +89,7 @@ class Config:
     SAVE_EVERY_N_EPOCHS = 10  # Save checkpoint mỗi 10 epochs
 
     # Early stopping
-    EARLY_STOPPING_PATIENCE = 5  # Dừng nếu không improve sau 20 epochs
+    EARLY_STOPPING_PATIENCE = 10  # Dừng nếu không improve sau 20 epochs
 
     # Learning rate schedule
     SCHEDULER = "cosine_warmup"
@@ -98,6 +101,10 @@ class Config:
     GRADIENT_CHECKPOINTING = True  # Tiết kiệm memory
     PIN_MEMORY = True              # Tăng tốc copy H2D
     NUM_WORKERS = 4               # 4 worker cho 1660S hợp lý
+
+    VAL_SPLIT = 0.15
+    TEST_SPLIT = 0.1
+    TRAIN_SPLIT = 0.75
 
     def __repr__(self):
         return (f"Config(device={self.DEVICE}, batch_size={self.BATCH_SIZE}, "

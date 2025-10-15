@@ -23,8 +23,8 @@ def evaluate_on_test_set(config: Config):
 
     print(f"Đang tải dữ liệu từ: {config.TEST_CAPTION_FILE}")
     test_dataset = MathExpressionDataset(
-        processed_image_dir=config.TEST_PROCESSED_IMAGE_DIR,
-        caption_file=config.TEST_CAPTION_FILE,
+        processed_image_dir=config.VAL_PROCESSED_IMAGE_DIR, #TEST_PROCESSED_IMAGE_DIR
+        caption_file=config.VAL_CAPTION_FILE, #TEST_PROCESSED_IMAGE_DIR
         dictionary_file=config.DICTIONARY_FILE,
         is_train=False
     )
