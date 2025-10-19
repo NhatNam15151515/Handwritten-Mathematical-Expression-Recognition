@@ -139,7 +139,7 @@ class Trainer:
         self.model.eval()
         losses, accuracies = AverageMeter(), AverageMeter()
         all_predictions, all_targets = [], []
-
+        bleu_scores = calculate_bleu_score(all_predictions, all_targets)
         with torch.no_grad():
             pbar = tqdm(self.val_loader, desc="[Evaluating]")
             for batch in pbar:

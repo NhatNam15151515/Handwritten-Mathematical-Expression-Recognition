@@ -167,11 +167,11 @@ if __name__ == "__main__":
     cfg = Config()
 
     if DEBUG:
-        #"data/test)image/35_em_18.bmp"
-        example_image_path = "test_image.png"
+        #"data/test_image/35_em_18.bmp"
+        example_image_path = "data/test_image/516_em_383.bmp"
 
         debug_args = [
-            '--checkpoint', 'checkpoints/best.pth',
+            '--checkpoint', 'checkpoints/best_88.pth',
             '--image', str(example_image_path),
             '--visualize'
         ]

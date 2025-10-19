@@ -400,7 +400,7 @@ class MathExpressionVisionTransformer(nn.Module):
             # 'vit_base_patch16_224.augreg_in21k'
             # 'vit_small_patch16_224.augreg_in21k'
             # 'vit_tiny_patch16_224.augreg_in21k'
-            'vit_small_patch16_224.augreg_in21k',
+            'vit_base_patch16_224.augreg_in21k',
             pretrained=True,
             num_classes=0,  # Quan trọng: Bỏ lớp phân loại cuối cùng
             img_size=config.IMAGE_SIZE,

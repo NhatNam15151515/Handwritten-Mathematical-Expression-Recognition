@@ -42,10 +42,10 @@ def evaluate_on_test_set(config: Config):
     print("Đang khởi tạo mô hình...")
     model = MathExpressionVisionTransformer(config, vocab_size).to(device)
 
-    checkpoint_path = config.CHECKPOINT_DIR / "best.pth"
+    checkpoint_path = config.CHECKPOINT_DIR / "best_90.pth"
     if not checkpoint_path.exists():
         print(f"Lỗi: Không tìm thấy checkpoint tại '{checkpoint_path}'.")
-        print("Hãy chắc chắn anh đã huấn luyện và lưu lại checkpoint tốt nhất.")
+        print("Hãy chắc chắn đã huấn luyện và lưu lại checkpoint tốt nhất.")
         return
 
     print(f"Đang tải checkpoint từ: {checkpoint_path}")
