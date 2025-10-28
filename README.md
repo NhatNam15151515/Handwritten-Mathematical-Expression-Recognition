@@ -52,16 +52,11 @@ pip install -r requirements.txt
 
 Trước khi huấn luyện, tất cả các ảnh trong bộ dữ liệu cần được xử lý (binarize, resize, padding) để đưa về một định dạng chuẩn. Quá trình này giúp tăng tốc độ training một cách đáng kể vì các tác vụ nặng đã được thực hiện trước.
 
-Chạy script sau để bắt đầu:
-
-```bash
-# Script này sẽ đọc ảnh từ off_image_*, xử lý và lưu vào *_processed/
-python preprocess.py
-```
+Quy trình này đã được tôi chuẩn bị trước, chỉ cần giải nén tệp data_processed.zip
 
 ### 3. Huấn luyện Mô hình
 
-Sau khi dữ liệu đã được tiền xử lý, bạn có thể bắt đầu quá trình huấn luyện.
+Bây giờ bạn có thể bắt đầu quá trình huấn luyện.
 
 ```bash
 # Bắt đầu training, Dataloader sẽ đọc trực tiếp từ thư mục *_processed/
@@ -77,11 +72,14 @@ python train.py
 ## 🔍 Inference (Dự đoán)
 
 Sử dụng script `inference.py` để nhận dạng biểu thức trên một ảnh mới hoặc trên toàn bộ tập test.
+Có thể tải về và sử dụng các tệp trọng số đã train sẵn theo đường link này: https://drive.google.com/file/d/1MqvF4QpjNeEvj__FAJki1yXzQ6vMGNtD/view?usp=sharing
+sau đó giải nén vào thư mục checkpoints
+tệp best_91_base là tệp tốt nhất
 
 ### Nhận dạng trên một ảnh đơn lẻ
 
 ```bash
-python inference.py --checkpoint checkpoints/best.pth --image path/to/your/image.bmp
+python inference.py --checkpoint checkpoints/best.pth --image path/to/your/image.png
 ```
 
 ### Đánh giá trên toàn bộ tập Test
