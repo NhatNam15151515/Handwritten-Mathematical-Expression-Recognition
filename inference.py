@@ -168,10 +168,10 @@ if __name__ == "__main__":
 
     if DEBUG:
         #"data/test_image/35_em_18.bmp"
-        example_image_path = "data/test_image/516_em_383.bmp"
+        example_image_path = "sinx.png"
 
         debug_args = [
-            '--checkpoint', 'checkpoints/best_88.pth',
+            '--checkpoint', 'checkpoints/best_91_base.pth',
             '--image', str(example_image_path),
             '--visualize'
         ]

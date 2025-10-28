@@ -1,4 +1,4 @@
-# evaluate.py
+# evaluate.py (Phiên bản đã cập nhật để hiển thị BLEU chi tiết)
 import torch
 from tqdm import tqdm
 import numpy as np
@@ -23,8 +23,8 @@ def evaluate_on_test_set(config: Config):
 
     print(f"Đang tải dữ liệu từ: {config.TEST_CAPTION_FILE}")
     test_dataset = MathExpressionDataset(
-        processed_image_dir=config.VAL_PROCESSED_IMAGE_DIR, #TEST_PROCESSED_IMAGE_DIR
-        caption_file=config.VAL_CAPTION_FILE, #TEST_PROCESSED_IMAGE_DIR
+        processed_image_dir=config.TEST_PROCESSED_IMAGE_DIR,
+        caption_file=config.TEST_CAPTION_FILE,
         dictionary_file=config.DICTIONARY_FILE,
         is_train=False
     )
@@ -42,7 +42,7 @@ def evaluate_on_test_set(config: Config):
     print("Đang khởi tạo mô hình...")
     model = MathExpressionVisionTransformer(config, vocab_size).to(device)
 
-    checkpoint_path = config.CHECKPOINT_DIR / "best_90.pth"
+    checkpoint_path = config.CHECKPOINT_DIR / "best_89_base.pth"
     if not checkpoint_path.exists():
         print(f"Lỗi: Không tìm thấy checkpoint tại '{checkpoint_path}'.")
         print("Hãy chắc chắn đã huấn luyện và lưu lại checkpoint tốt nhất.")
@@ -88,14 +88,25 @@ def evaluate_on_test_set(config: Config):
                 all_predictions.append(pred_str)
                 all_targets.append([tgt_str])
 
-    bleu = calculate_bleu_score(all_predictions, all_targets)
+    # <<< THAY ĐỔI 1: Nhận dictionary chứa các điểm BLEU >>>
+    bleu_scores = calculate_bleu_score(all_predictions, all_targets)
 
     # 4. IN KẾT QUẢ CUỐI CÙNG
     print("\n" + "=" * 60)
     print("KẾT QUẢ CUỐI CÙNG TRÊN TẬP TEST")
     print("=" * 60)
     print(f"Test Accuracy: {accuracies.avg:.4f}")
-    print(f"Test BLEU Score: {bleu:.4f}")
+
+    # <<< THAY ĐỔI 2: In ra bảng điểm BLEU chi tiết >>>
+    print("-" * 30)
+    print("Detailed BLEU Scores:")
+    if bleu_scores:
+        print(f"  - BLEU-1 (Individual tokens): {bleu_scores.get('bleu-1', 0.0):.4f}")
+        print(f"  - BLEU-2 (Token pairs):       {bleu_scores.get('bleu-2', 0.0):.4f}")
+        print(f"  - BLEU-3 (Token triplets):    {bleu_scores.get('bleu-3', 0.0):.4f}")
+        print(f"  - BLEU-4 (Standard):          {bleu_scores.get('bleu-4', 0.0):.4f}")
+    else:
+        print("  - Không thể tính toán điểm BLEU.")
     print("=" * 60)
 
 

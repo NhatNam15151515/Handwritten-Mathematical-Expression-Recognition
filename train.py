@@ -15,6 +15,7 @@ from dataset import create_dataloaders
 from model import MathExpressionVisionTransformer
 from utils import AverageMeter, calculate_bleu_score, save_checkpoint
 
+
 class Trainer:
     def __init__(self, config: Config):
         self.config = config
@@ -77,20 +78,22 @@ class Trainer:
                 v = getattr(self.config, k)
                 if isinstance(v, (int, float, str, bool)):
                     hyperparams[k] = v
-        
+
         self.hyperparam_keys = sorted(hyperparams.keys())
         self.hyperparam_values = [hyperparams[k] for k in self.hyperparam_keys]
 
         try:
             self.history_file = open(self.history_log_path, 'w', newline='', encoding='utf-8')
             self.history_writer = csv.writer(self.history_file)
-            
+
             # Tạo header với các siêu tham số
-            headers = [
-                'epoch', 'train_loss', 'train_accuracy',
-                'val_loss', 'val_accuracy', 'val_bleu',
-                'encoder_lr', 'decoder_lr'
-            ] + self.hyperparam_keys
+            headers = ['epoch', 'train_loss',
+                       'train_accuracy',
+                       'val_loss',
+                       'val_accuracy',
+                       'val_bleu_1', 'val_bleu_2', 'val_bleu_3', 'val_bleu_4',
+                       'encoder_lr',
+                       'decoder_lr'] + self.hyperparam_keys
 
             self.history_writer.writerow(headers)
             print(f"Lịch sử huấn luyện sẽ được ghi vào: {self.history_log_path}")
@@ -103,7 +106,7 @@ class Trainer:
         losses, accuracies = AverageMeter(), AverageMeter()
         scaler = torch.amp.GradScaler(enabled=self.config.USE_MIXED_PRECISION)
 
-        pbar = tqdm(self.train_loader, desc=f"Epoch {self.epoch+1}/{self.config.NUM_EPOCHS} [Training]")
+        pbar = tqdm(self.train_loader, desc=f"Epoch {self.epoch + 1}/{self.config.NUM_EPOCHS} [Training]")
 
         for batch_idx, batch in enumerate(pbar):
             images = batch['image'].to(self.device)
@@ -139,7 +142,6 @@ class Trainer:
         self.model.eval()
         losses, accuracies = AverageMeter(), AverageMeter()
         all_predictions, all_targets = [], []
-        bleu_scores = calculate_bleu_score(all_predictions, all_targets)
         with torch.no_grad():
             pbar = tqdm(self.val_loader, desc="[Evaluating]")
             for batch in pbar:
@@ -170,8 +172,10 @@ class Trainer:
                     all_predictions.append(pred_str)
                     all_targets.append([tgt_str])
 
-        bleu = calculate_bleu_score(all_predictions, all_targets)
-        return {'loss': losses.avg, 'accuracy': accuracies.avg, 'bleu': bleu}
+        bleu_scores = calculate_bleu_score(all_predictions, all_targets)
+        eval_results = {'loss': losses.avg, 'accuracy': accuracies.avg}
+        eval_results.update(bleu_scores)  # Gộp dictionary bleu_scores vào
+        return eval_results
 
     def _indices_to_tokens(self, indices: np.ndarray) -> str:
         tokens = []
@@ -223,16 +227,19 @@ class Trainer:
 
                 # Thêm giá trị siêu tham số vào mỗi dòng
                 row = [
-                    epoch + 1,
-                    train_metrics['loss'],
-                    train_metrics['accuracy'],
-                    eval_metrics['loss'],
-                    eval_metrics['accuracy'],
-                    eval_metrics['bleu'],
-                    encoder_lr,
-                    decoder_lr
-                ] + self.hyperparam_values
-                
+                          epoch + 1,
+                          train_metrics['loss'],
+                          train_metrics['accuracy'],
+                          eval_metrics['loss'],
+                          eval_metrics['accuracy'],
+                          eval_metrics.get('bleu-1', 0.0),
+                          eval_metrics.get('bleu-2', 0.0),
+                          eval_metrics.get('bleu-3', 0.0),
+                          eval_metrics.get('bleu-4', 0.0),
+                          encoder_lr,
+                          decoder_lr
+                      ] + self.hyperparam_values
+
                 self.history_writer.writerow(row)
                 self.history_file.flush()
             except IOError as e:
@@ -245,23 +252,26 @@ class Trainer:
             self.epoch = epoch
             train_metrics = self.train_epoch()
             eval_metrics = self.evaluate()
-            
+
             self._log_epoch_history(epoch, train_metrics, eval_metrics)
-            
+
             self.scheduler.step()
 
-            print(f"\nEpoch {epoch+1}/{self.config.NUM_EPOCHS}:\n"
+            print(f"\nEpoch {epoch + 1}/{self.config.NUM_EPOCHS}:\n"
                   f"Train Loss: {train_metrics['loss']:.4f}, Train Acc: {train_metrics['accuracy']:.4f}\n"
                   f"Val Loss: {eval_metrics['loss']:.4f}, Val Acc: {eval_metrics['accuracy']:.4f}\n"
-                  f"Val BLEU: {eval_metrics['bleu']:.4f}")
+                  f"Val BLEU-1: {eval_metrics.get('bleu-1', 0.0):.4f}, BLEU-2: {eval_metrics.get('bleu-2', 0.0):.4f}, "
+                  f"BLEU-3: {eval_metrics.get('bleu-3', 0.0):.4f}, BLEU-4: {eval_metrics.get('bleu-4', 0.0):.4f}")
 
-            is_best = eval_metrics['bleu'] > self.best_bleu
+            current_bleu = eval_metrics.get('bleu-4', 0.0)
+            is_best = current_bleu > self.best_bleu
             if is_best:
-                self.best_bleu = eval_metrics['bleu']
+                self.best_bleu = current_bleu
                 patience_counter = 0
+                print(f"🎉 New best model found with BLEU-4: {self.best_bleu:.4f}")
             else:
                 patience_counter += 1
- 
+
             save_checkpoint({
                 'epoch': epoch + 1,
                 'model_state_dict': self.model.state_dict(),
@@ -269,15 +279,16 @@ class Trainer:
                 'best_bleu': self.best_bleu,
                 'vocab': self.vocab
             }, is_best, self.config.CHECKPOINT_DIR)
- 
+
             if (epoch + 1) % 10 == 0: self.generate_samples()
- 
+
             if patience_counter >= self.config.EARLY_STOPPING_PATIENCE:
-                print(f"\nEarly stopping sau {epoch + 1} epochs vì không có cải thiện trong {self.config.EARLY_STOPPING_PATIENCE} epochs.")
+                print(
+                    f"\nEarly stopping sau {epoch + 1} epochs vì không có cải thiện trong {self.config.EARLY_STOPPING_PATIENCE} epochs.")
                 break
- 
+
         print(f"\nHoàn tất huấn luyện! Best BLEU: {self.best_bleu:.4f}")
- 
+
         if self.history_file:
             self.history_file.close()
             print(f"Đã lưu lịch sử huấn luyện vào {self.history_log_path}")
@@ -285,8 +296,72 @@ class Trainer:
 def main():
     config = Config()
     config.print_config()
+
+    # --- BẮT ĐẦU LOGIC FINE-TUNING ---
+
+    # 1. Khởi tạo Trainer như bình thường
     trainer = Trainer(config)
-    trainer.train()
+
+    # 2. Tải lên checkpoint tốt nhất đã có
+    CHECKPOINT_TO_LOAD = "best.pth"  # Hoặc best_89_base.pth,...
+    checkpoint_path = config.CHECKPOINT_DIR / CHECKPOINT_TO_LOAD
+    FINE_TUNING = False
+
+    if FINE_TUNING and checkpoint_path.exists():
+        print("\n" + "#" * 60)
+        print(f"### TIẾN HÀNH FINE-TUNING TỪ CHECKPOINT: {CHECKPOINT_TO_LOAD} ###")
+        print("#" * 60 + "\n")
+
+        # Tải trọng số mô hình
+        checkpoint = torch.load(checkpoint_path, map_location=config.DEVICE)
+        trainer.model.load_state_dict(checkpoint['model_state_dict'])
+
+        # (Tùy chọn nhưng khuyến khích) Tải lại trạng thái optimizer để tiếp tục mượt mà hơn
+        if 'optimizer_state_dict' in checkpoint:
+            trainer.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+
+        # Cập nhật các thông số từ checkpoint
+        trainer.epoch = checkpoint.get('epoch', 0)
+        trainer.best_bleu = checkpoint.get('best_bleu', 0.0)
+
+        print(f"Đã tải thành công checkpoint từ epoch {trainer.epoch}. Best BLEU hiện tại: {trainer.best_bleu:.4f}")
+
+        # 3. THIẾT LẬP CÁC THAM SỐ CHO GIAI ĐOẠN FINE-TUNING
+
+        # Cực kỳ quan trọng: Sử dụng learning rate rất thấp!
+        FINETUNE_ENCODER_LR = 5e-6  # Rất thấp để "lay nhẹ" encoder
+        FINETUNE_DECODER_LR = 1e-5  # Thấp hơn so với training ban đầu
+
+        print(
+            f"Cập nhật optimizer cho fine-tuning. Encoder LR: {FINETUNE_ENCODER_LR}, Decoder LR: {FINETUNE_DECODER_LR}")
+
+        # Ghi đè learning rate trong optimizer đã tải
+        trainer.optimizer.param_groups[0]['lr'] = FINETUNE_ENCODER_LR
+        trainer.optimizer.param_groups[1]['lr'] = FINETUNE_DECODER_LR
+
+        # Thiết lập số epoch cho giai đoạn fine-tuning này
+        NUM_FINETUNE_EPOCHS = 20
+
+        # Reset scheduler với số epoch mới
+        trainer.scheduler = CosineAnnealingLR(
+            trainer.optimizer,
+            T_max=NUM_FINETUNE_EPOCHS,
+            eta_min=config.MIN_LR
+        )
+
+        # Ghi đè lại NUM_EPOCHS trong config để thanh tiến trình hiển thị đúng
+        trainer.config.NUM_EPOCHS = trainer.epoch + NUM_FINETUNE_EPOCHS
+
+        # 4. Bắt đầu huấn luyện tiếp
+        trainer.train()
+
+    else:
+        # Nếu không tìm thấy checkpoint, chạy huấn luyện từ đầu như bình thường
+        print("\n" + "#" * 60)
+        print(f"BẮT ĐẦU HUẤN LUYỆN TỪ ĐẦU")
+        print("#" * 60 + "\n")
+        trainer.train()
+
 
 if __name__ == "__main__":
     main()

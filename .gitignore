@@ -5,6 +5,7 @@ __pycache__/
 checkpoints/*.pth
 checkpoints/*.pt
 checkpoints/*.ckpt
+checkpoints/*.zip
 logs/
 outputs/
 

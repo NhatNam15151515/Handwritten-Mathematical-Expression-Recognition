@@ -43,8 +43,8 @@ class Config:
     # Training parameters
     BATCH_SIZE = 4             # Điều chỉnh theo VRAM
     ACCUMULATION_STEPS = 4    # Tăng tích lũy để batch hiệu quả lớn hơn
-    ENCODER_LR = 2e-5  # LR rất thấp cho encoder pre-trained old 2e-5
-    DECODER_LR = 3e-4  # LR cao hơn cho các lớp mới (decoder) old 3e-4
+    ENCODER_LR = 2e-5  # LR rất thấp cho encoder pre-trained "old 2e-5"
+    DECODER_LR = 3e-4  # LR cao hơn cho các lớp mới (decoder) "old 3e-4"
     MIN_LR = 1e-6
     WEIGHT_DECAY = 5e-4        # Nhẹ hơn để tránh quá regularize với dropout
     NUM_EPOCHS = 60            # Thêm epoch để BLEU lên đều (nhanh/epoch) old 60

@@ -75,27 +75,32 @@ class AverageMeter:
         self.count += n
         self.avg = self.sum / self.count
 
-def calculate_bleu_score(predictions: List[str], references: List[List[str]]) -> float:
-    """Calculate BLEU score for predictions"""
+# Thay thế trong utils.py
+
+def calculate_bleu_score(predictions: List[str], references: List[List[str]]) -> Dict[str, float]:
+    """
+    Tính toán các điểm BLEU chi tiết (BLEU-1, 2, 3, 4).
+    Trả về một dictionary chứa các điểm số.
+    """
     try:
-        # Chuyển các chuỗi dự đoán thành list các token
         hypotheses = [p.split() for p in predictions]
+        list_of_references = [[r.split() for r in ref_list] for ref_list in references]
 
-        # Chuyển các chuỗi tham chiếu thành định dạng NLTK mong muốn
-        # (list of sentences, where each sentence is a list of references,
-        # and each reference is a list of tokens)
-        list_of_references = []
-        for ref_list in references:
-            # Mỗi câu chỉ có 1 tham chiếu, nhưng nltk cần nó nằm trong 1 list nữa
-            list_of_references.append([r.split() for r in ref_list])
+        # Tính toán các điểm BLEU riêng lẻ
+        bleu_1 = corpus_bleu(list_of_references, hypotheses, weights=(1, 0, 0, 0))
+        bleu_2 = corpus_bleu(list_of_references, hypotheses, weights=(0.5, 0.5, 0, 0))
+        bleu_3 = corpus_bleu(list_of_references, hypotheses, weights=(1/3, 1/3, 1/3, 0))
+        bleu_4 = corpus_bleu(list_of_references, hypotheses, weights=(0.25, 0.25, 0.25, 0.25))
 
-        # Tính toán điểm BLEU-4 (mặc định)
-        bleu = corpus_bleu(list_of_references, hypotheses)
-        return bleu
+        return {
+            'bleu-1': bleu_1,
+            'bleu-2': bleu_2,
+            'bleu-3': bleu_3,
+            'bleu-4': bleu_4  # Đây là điểm BLEU tiêu chuẩn
+        }
     except Exception as e:
-        # In lỗi ra để debug nếu có vấn đề
         print(f"Lỗi khi tính BLEU: {e}")
-        return 0.0
+        return {'bleu-1': 0.0, 'bleu-2': 0.0, 'bleu-3': 0.0, 'bleu-4': 0.0}
 
 def save_checkpoint(state: Dict[str, Any], is_best: bool, checkpoint_dir: Path):
     """Save model checkpoint"""
