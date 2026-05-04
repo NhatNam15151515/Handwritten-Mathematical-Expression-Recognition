@@ -2,7 +2,7 @@
 
 Hệ thống nhận dạng biểu thức toán học viết tay, được xây dựng bằng Python và PyTorch, sử dụng kiến trúc **Vision Transformer (ViT)** kết hợp với một **Transformer Decoder**. Mô hình này được thiết kế để chuyển đổi hình ảnh của các biểu thức toán học viết tay thành chuỗi LaTeX tương ứng.
 
-## 🎯 Tính năng chính
+## Tính năng chính
 
 -   **Pre-trained Vision Transformer**: Sử dụng mô hình `vit-small-patch16-224` đã được huấn luyện trước trên ImageNet-21k làm bộ mã hóa (encoder), giúp trích xuất đặc trưng hình ảnh mạnh mẽ.
 -   **Transformer Decoder**: Sinh ra chuỗi LaTeX từ các đặc trưng hình ảnh đã được mã hóa.
@@ -11,7 +11,7 @@ Hệ thống nhận dạng biểu thức toán học viết tay, được xây d
 -   **Beam Search Inference**: Tùy chọn sử dụng beam search để cải thiện chất lượng của chuỗi LaTeX được sinh ra.
 -   **Evaluation Metrics**: Đánh giá hiệu suất mô hình bằng các độ đo phổ biến như BLEU score và Edit Distance.
 
-## 📁 Cấu trúc dự án
+## Cấu trúc dự án
 
 ```
 .
@@ -35,7 +35,7 @@ Hệ thống nhận dạng biểu thức toán học viết tay, được xây d
 # └─- outputs/                  # Kết quả inference (bị git ignore)
 ```
 
-## 🚀 Quy trình làm việc (Workflow)
+## Quy trình làm việc (Workflow)
 
 Quy trình chuẩn để huấn luyện và sử dụng mô hình được chia thành 3 bước chính:
 
@@ -69,7 +69,7 @@ python train.py
     ```
 -   Checkpoints của mô hình sẽ được tự động lưu vào thư mục `checkpoints/`.
 
-## 🔍 Inference (Dự đoán)
+## Inference (Dự đoán)
 
 Sử dụng script `inference.py` để nhận dạng biểu thức trên một ảnh mới hoặc trên toàn bộ tập test.
 Có thể tải về và sử dụng các tệp trọng số đã train sẵn theo đường link này: https://drive.google.com/file/d/1MqvF4QpjNeEvj__FAJki1yXzQ6vMGNtD/view?usp=sharing
