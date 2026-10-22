@@ -101,3 +101,5 @@ Toàn bộ các tham số quan trọng của mô hình và quá trình huấn lu
 *Dự án này được phát triển cho mục đích nghiên cứu và học tập. Để triển khai trong môi trường production, có thể cần thêm các tối ưu hóa về hiệu suất và độ tin cậy.*
 
 
+## Bộ dữ liệu sồ và chữ
+https://www.nist.gov/itl/products-and-services/emnist-dataset
