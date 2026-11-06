@@ -4,6 +4,7 @@ Utility functions for Handwritten Mathematical Expression Recognition
 import torch
 import torch.nn as nn
 from pathlib import Path
+import os
 import json
 import numpy as np
 from typing import List, Dict, Any, Optional
@@ -103,18 +104,28 @@ def calculate_bleu_score(predictions: List[str], references: List[List[str]]) ->
         return {'bleu-1': 0.0, 'bleu-2': 0.0, 'bleu-3': 0.0, 'bleu-4': 0.0}
 
 def save_checkpoint(state: Dict[str, Any], is_best: bool, checkpoint_dir: Path):
-    """Save model checkpoint"""
-    checkpoint_dir.mkdir(exist_ok=True)
-    
-    # Save latest checkpoint
-    checkpoint_path = checkpoint_dir / "latest.pth"
-    torch.save(state, checkpoint_path)
-    
-    # Save best checkpoint
+    """Atomically save checkpoints so interruption cannot truncate the prior file."""
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
+    def atomic_save(path: Path) -> None:
+        temp_path = path.with_name(f".{path.name}.tmp")
+        try:
+            torch.save(state, temp_path)
+            os.replace(temp_path, path)
+        finally:
+            if temp_path.exists():
+                temp_path.unlink()
+
+    atomic_save(checkpoint_dir / "latest.pth")
+
     if is_best:
         best_path = checkpoint_dir / "best.pth"
-        torch.save(state, best_path)
-        print(f"New best model saved with BLEU: {state['best_bleu']:.4f}")
+        atomic_save(best_path)
+        metric_name = state.get("best_metric_name")
+        if metric_name is None:
+            metric_name = "validation accuracy" if state.get("training_stage") == "symbols" else "BLEU-4"
+        metric_value = state.get("best_metric", state.get("best_bleu", 0.0))
+        print(f"New best model saved with {metric_name}: {metric_value:.4f}")
 
 def load_checkpoint(checkpoint_path: Path, model: nn.Module, optimizer=None, scheduler=None) -> Dict[str, Any]:
     """Load model checkpoint"""

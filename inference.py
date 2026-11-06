@@ -19,7 +19,7 @@ from preprocess import _preprocess_image as standalone_preprocess
 from preprocess import _resize_with_padding as standalone_resize
 
 # --- Chế độ DEBUG ---
-DEBUG = True
+DEBUG = False
 
 
 # ===================================================================================
@@ -85,6 +85,12 @@ class InferenceEngine:
         self.vocab = temp_dataset.vocab
         self.idx_to_token = temp_dataset.idx_to_token
         self.vocab_size = len(self.vocab)
+        bracket_token_pairs = (("{", "}"), ("(", ")"), ("[", "]"), (r"\{", r"\}"))
+        self.bracket_pairs = {
+            self.vocab[open_token]: self.vocab[close_token]
+            for open_token, close_token in bracket_token_pairs
+            if open_token in self.vocab and close_token in self.vocab
+        }
 
         self.model = MathExpressionVisionTransformer(config=self.config, vocab_size=self.vocab_size)
 
@@ -111,7 +117,8 @@ class InferenceEngine:
 
         return image_tensor.unsqueeze(0).to(self.device)
 
-    def predict(self, image_path: Path, top_k: int, temperature: float, visualize: bool = False):
+    def predict(self, image_path: Path, top_k: int, temperature: float,
+                visualize: bool = False, balance_brackets: bool = False):
         """Hàm dự đoán chính, có gọi hàm hiển thị nếu cần."""
         with torch.no_grad():
             # 1. Xử lý ảnh
@@ -126,7 +133,9 @@ class InferenceEngine:
             eos_id = self.vocab[Config.EOS_TOKEN]
             output_indices = self.model.generate(
                 images=image_tensor, sos_token_id=sos_id, eos_token_id=eos_id,
-                max_length=self.config.MAX_SEQ_LENGTH, temperature=temperature, top_k=top_k
+                max_length=self.config.MAX_SEQ_LENGTH, temperature=temperature, top_k=top_k,
+                enforce_balanced_brackets=balance_brackets,
+                bracket_pairs=self.bracket_pairs if balance_brackets else None,
             ).squeeze(0).cpu().numpy()
 
             # 4. Giải mã kết quả
@@ -145,7 +154,8 @@ def main(config: Config, args):
             Path(args.image),
             args.top_k,
             args.temperature,
-            visualize=args.visualize
+            visualize=args.visualize,
+            balance_brackets=args.balance_brackets,
         )
         print("\n--- DỰ ĐOÁN ---")
         print(f"Ảnh: {args.image}")
@@ -162,6 +172,10 @@ if __name__ == "__main__":
     parser.add_argument('--image', type=str, help="Đường dẫn đến một ảnh đơn lẻ để dự đoán.")
     parser.add_argument('--top_k', type=int, default=5, help="Sử dụng top-k sampling.")
     parser.add_argument('--temperature', type=float, default=1.0, help="Nhiệt độ cho sampling.")
+    parser.add_argument(
+        '--balance-brackets', action='store_true',
+        help="Ràng buộc ngoặc phải khớp và cân bằng khi sinh chuỗi."
+    )
     parser.add_argument('--visualize', action='store_true', help="Hiển thị ảnh gốc, ảnh đã xử lý và kết quả.")
 
     cfg = Config()

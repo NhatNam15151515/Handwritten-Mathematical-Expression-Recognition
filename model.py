@@ -4,16 +4,18 @@ Vision Transformer model optimized for GTX 1660 Super and small dataset
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.utils.checkpoint
 import math
-import timm
 from typing import Optional, Tuple
 from einops import rearrange, repeat
 import random
 
 from config import Config
 
+
 class DropPath(nn.Module):
     """Drop paths (Stochastic Depth) per sample"""
+
     def __init__(self, drop_prob: float = 0.):
         super().__init__()
         self.drop_prob = drop_prob
@@ -28,8 +30,10 @@ class DropPath(nn.Module):
         output = x.div(keep_prob) * random_tensor
         return output
 
+
 class PatchEmbedding(nn.Module):
     """Convert image to patch embeddings"""
+
     def __init__(self, img_size: int, patch_size: int, in_channels: int, embed_dim: int):
         super().__init__()
         self.img_size = img_size
@@ -51,11 +55,13 @@ class PatchEmbedding(nn.Module):
         x = self.norm(x)
         return x, h, w
 
+
 class MultiHeadAttention(nn.Module):
     """
     Lớp này DÀNH RIÊNG cho Self-Attention.
     Nó chỉ nhận MỘT đầu vào 'x' và tự tạo ra Q, K, V từ đó.
     """
+
     def __init__(self, embed_dim: int, num_heads: int, dropout: float = 0.1, attn_dropout: float = 0.1):
         super().__init__()
         assert embed_dim % num_heads == 0
@@ -91,8 +97,10 @@ class MultiHeadAttention(nn.Module):
         x = self.proj_drop(x)
         return x
 
+
 class MLP(nn.Module):
     """MLP với GELU activation và dropout"""
+
     def __init__(self, embed_dim: int, mlp_ratio: float = 4.0, dropout: float = 0.1):
         super().__init__()
         hidden_dim = int(embed_dim * mlp_ratio)
@@ -111,17 +119,19 @@ class MLP(nn.Module):
         x = self.drop2(x)
         return x
 
+
 class TransformerBlock(nn.Module):
     """Transformer block với DropPath và gradient checkpointing"""
+
     def __init__(
-        self,
-        embed_dim: int,
-        encoder_embed_dim: int,  # <--- THÊM THAM SỐ NÀY
-        num_heads: int,
-        mlp_ratio: float = 4.0,
-        dropout: float = 0.1,
-        attn_dropout: float = 0.1,
-        drop_path: float = 0.
+            self,
+            embed_dim: int,
+            encoder_embed_dim: int,  # <--- THÊM THAM SỐ NÀY
+            num_heads: int,
+            mlp_ratio: float = 4.0,
+            dropout: float = 0.1,
+            attn_dropout: float = 0.1,
+            drop_path: float = 0.
     ):
         super().__init__()
         self.mlp_ratio = mlp_ratio
@@ -138,20 +148,22 @@ class TransformerBlock(nn.Module):
         x = x + self.drop_path2(self.mlp(self.norm2(x)))
         return x
 
+
 class VisionTransformer(nn.Module):
     """Vision Transformer với regularization techniques"""
+
     def __init__(
-        self,
-        img_size: int = 192,
-        patch_size: int = 16,
-        in_channels: int = 3,
-        embed_dim: int = 384,
-        num_layers: int = 6,
-        num_heads: int = 6,
-        mlp_ratio: float = 3.0,
-        dropout: float = 0.15,
-        attn_dropout: float = 0.1,
-        drop_path_rate: float = 0.2
+            self,
+            img_size: int = 192,
+            patch_size: int = 16,
+            in_channels: int = 3,
+            embed_dim: int = 384,
+            num_layers: int = 6,
+            num_heads: int = 6,
+            mlp_ratio: float = 3.0,
+            dropout: float = 0.15,
+            attn_dropout: float = 0.1,
+            drop_path_rate: float = 0.2
     ):
         super().__init__()
 
@@ -195,7 +207,6 @@ class VisionTransformer(nn.Module):
         # Patch embedding
         x, h_p, w_p = self.patch_embed(x)
 
-
         # Add positional embedding (interpolate 2D grid to current h_p x w_p)
         pos_tokens = self.pos_embed[:, 1:, :]  # (1, H0*W0, D)
         H0, W0 = self.base_grid_size
@@ -216,19 +227,22 @@ class VisionTransformer(nn.Module):
 
         return x
 
+
 class TransformerDecoder(nn.Module):
     """Transformer decoder với label smoothing và regularization"""
+
     def __init__(
-        self,
-        vocab_size: int,
-        embed_dim: int = 384,
-        encoder_embed_dim: int = 768,
-        num_layers: int = 3,
-        num_heads: int = 8,
-        mlp_ratio: float = 3.0,
-        dropout: float = 0.15,
-        attn_dropout: float = 0.1,
-        max_seq_length: int = 200
+            self,
+            vocab_size: int,
+            embed_dim: int = 384,
+            encoder_embed_dim: int = 768,
+            num_layers: int = 3,
+            num_heads: int = 8,
+            mlp_ratio: float = 3.0,
+            dropout: float = 0.15,
+            attn_dropout: float = 0.1,
+            max_seq_length: int = 200,
+            use_coverage: bool = False,
     ):
         super().__init__()
 
@@ -243,7 +257,8 @@ class TransformerDecoder(nn.Module):
                 num_heads=num_heads,
                 mlp_ratio=mlp_ratio,
                 dropout=dropout,
-                attn_dropout=attn_dropout
+                attn_dropout=attn_dropout,
+                use_coverage=use_coverage,
             )
             for _ in range(num_layers)
         ])
@@ -271,11 +286,12 @@ class TransformerDecoder(nn.Module):
         return mask.unsqueeze(0).unsqueeze(0)
 
     def forward(
-        self,
-        tgt: torch.Tensor,
-        encoder_output: torch.Tensor,
-        tgt_mask: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
+            self,
+            tgt: torch.Tensor,
+            encoder_output: torch.Tensor,
+            tgt_mask: Optional[torch.Tensor] = None,
+            return_hidden: bool = False,
+    ):
         B, seq_len = tgt.shape
 
         # Token embedding với scaling
@@ -291,21 +307,23 @@ class TransformerDecoder(nn.Module):
         for block in self.blocks:
             x = block(x, encoder_output, tgt_mask)
 
-        x = self.norm(x)
-        x = self.head(x)
+        hidden = self.norm(x)
+        logits = self.head(hidden)
+        return (logits, hidden) if return_hidden else logits
 
-        return x
 
 class TransformerDecoderBlock(nn.Module):
     """Decoder block với cross-attention"""
+
     def __init__(
-        self,
-        embed_dim: int,
-        encoder_embed_dim: int, # <--- THÊM THAM SỐ NÀY
-        num_heads: int,
-        mlp_ratio: float = 3.0,
-        dropout: float = 0.15,
-        attn_dropout: float = 0.1
+            self,
+            embed_dim: int,
+            encoder_embed_dim: int,  # <--- THÊM THAM SỐ NÀY
+            num_heads: int,
+            mlp_ratio: float = 3.0,
+            dropout: float = 0.15,
+            attn_dropout: float = 0.1,
+            use_coverage: bool = False,
     ):
         super().__init__()
 
@@ -316,11 +334,12 @@ class TransformerDecoderBlock(nn.Module):
         self.norm2 = nn.LayerNorm(embed_dim)
         # Truyền cả hai chiều dữ liệu vào cross_attn
         self.cross_attn = MultiHeadCrossAttention(
-            decoder_dim=embed_dim,          # <--- CHIỀU CỦA DECODER
+            decoder_dim=embed_dim,  # <--- CHIỀU CỦA DECODER
             encoder_dim=encoder_embed_dim,  # <--- CHIỀU CỦA ENCODER
             num_heads=num_heads,
             dropout=dropout,
-            attn_dropout=attn_dropout
+            attn_dropout=attn_dropout,
+            use_coverage=use_coverage,
         )
         self.drop2 = nn.Dropout(dropout)
 
@@ -329,10 +348,10 @@ class TransformerDecoderBlock(nn.Module):
         self.drop3 = nn.Dropout(dropout)
 
     def forward(
-        self,
-        x: torch.Tensor,
-        encoder_output: torch.Tensor,
-        tgt_mask: Optional[torch.Tensor] = None
+            self,
+            x: torch.Tensor,
+            encoder_output: torch.Tensor,
+            tgt_mask: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
         # Self-attention với residual connection
         x = x + self.drop1(self.self_attn(self.norm1(x), tgt_mask))
@@ -353,7 +372,7 @@ class MultiHeadCrossAttention(nn.Module):
     """
 
     def __init__(self, decoder_dim: int, encoder_dim: int, num_heads: int, dropout: float = 0.15,
-                 attn_dropout: float = 0.1):
+                 attn_dropout: float = 0.1, use_coverage: bool = False):
         super().__init__()
         assert decoder_dim % num_heads == 0
 
@@ -367,6 +386,9 @@ class MultiHeadCrossAttention(nn.Module):
         self.attn_drop = nn.Dropout(attn_dropout)
         self.proj = nn.Linear(self.embed_dim, self.embed_dim)
         self.proj_drop = nn.Dropout(dropout)
+        self.use_coverage = use_coverage
+        self.coverage_refinement = nn.Conv2d(1, 1, kernel_size=3, padding=1, bias=False)
+        nn.init.zeros_(self.coverage_refinement.weight)
 
     def forward(self, query: torch.Tensor, key_value: torch.Tensor) -> torch.Tensor:
         B, N_q, C_q = query.shape
@@ -379,6 +401,24 @@ class MultiHeadCrossAttention(nn.Module):
         k, v = kv[0], kv[1]
 
         attn = (q @ k.transpose(-2, -1)) * self.scale
+        if self.use_coverage:
+            base_attention = F.softmax(attn, dim=-1)
+            previous_coverage = base_attention.cumsum(dim=2) - base_attention
+            grid_side = math.isqrt(N_kv)
+            if grid_side * grid_side != N_kv:
+                raise ValueError(
+                    "Coverage attention requires a square ViT feature grid; "
+                    f"received {N_kv} visual tokens."
+                )
+            coverage_maps = previous_coverage.reshape(
+                B * self.num_heads * N_q, 1, grid_side, grid_side
+            )
+            refinement = self.coverage_refinement(coverage_maps).reshape(
+                B, self.num_heads, N_q, N_kv
+            )
+            # CoMER-inspired attention refinement: use prior alignment coverage
+            # to adjust the current cross-attention scores.
+            attn = attn - refinement
         attn = F.softmax(attn, dim=-1)
         attn = self.attn_drop(attn)
 
@@ -387,26 +427,104 @@ class MultiHeadCrossAttention(nn.Module):
         x = self.proj_drop(x)
         return x
 
+
+class PatchTransformerBlock(nn.Module):
+    """Pre-norm Transformer encoder block for the shared native-resolution ViT."""
+
+    def __init__(self, embed_dim: int, num_heads: int, mlp_ratio: float, dropout: float,
+                 attn_dropout: float):
+        super().__init__()
+        self.norm1 = nn.LayerNorm(embed_dim)
+        self.attn = nn.MultiheadAttention(
+            embed_dim, num_heads, dropout=attn_dropout, batch_first=True
+        )
+        self.drop1 = nn.Dropout(dropout)
+        self.norm2 = nn.LayerNorm(embed_dim)
+        self.mlp = MLP(embed_dim, mlp_ratio, dropout)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        normalized = self.norm1(x)
+        attended, _ = self.attn(normalized, normalized, normalized, need_weights=False)
+        x = x + self.drop1(attended)
+        return x + self.mlp(self.norm2(x))
+
+
+class SharedPatchViTEncoder(nn.Module):
+    """Patch-2 ViT that handles 28–32 px symbols and pooled formula images."""
+
+    def __init__(self, config: Config):
+        super().__init__()
+        self.patch_size = config.PATCH_SIZE
+        self.max_grid_size = config.MAX_PATCH_GRID
+        self.patch_embed = nn.Conv2d(
+            3, config.EMBED_DIM, kernel_size=self.patch_size, stride=self.patch_size
+        )
+        position_grid_size = getattr(config, "POSITION_EMBED_GRID", self.max_grid_size)
+        self.pos_embed = nn.Parameter(
+            torch.zeros(1, config.EMBED_DIM, position_grid_size, position_grid_size)
+        )
+        self.pos_drop = nn.Dropout(config.DROPOUT)
+        self.blocks = nn.ModuleList([
+            PatchTransformerBlock(
+                config.EMBED_DIM,
+                config.NUM_HEADS,
+                config.MLP_RATIO,
+                config.DROPOUT,
+                config.ATTENTION_DROPOUT,
+            )
+            for _ in range(config.NUM_LAYERS)
+        ])
+        self.norm = nn.LayerNorm(config.EMBED_DIM)
+        self.gradient_checkpointing = config.GRADIENT_CHECKPOINTING
+        nn.init.trunc_normal_(self.pos_embed, std=0.02)
+        nn.init.kaiming_normal_(self.patch_embed.weight, mode="fan_out", nonlinearity="relu")
+        nn.init.zeros_(self.patch_embed.bias)
+
+    def forward_features(self, images: torch.Tensor) -> torch.Tensor:
+        features = self.patch_embed(images)
+        grid_h, grid_w = features.shape[-2:]
+
+        # Keep symbol patches native and use a capped grid for formula images
+        # while retaining the checkpoint-compatible position parameter.
+        scale = min(1.0, self.max_grid_size / max(grid_h, grid_w))
+        out_h = max(1, round(grid_h * scale))
+        out_w = max(1, round(grid_w * scale))
+        if (out_h, out_w) != (grid_h, grid_w):
+            features = F.adaptive_avg_pool2d(features, (out_h, out_w))
+
+        positions = F.interpolate(
+            self.pos_embed, size=(out_h, out_w), mode="bicubic", align_corners=False
+        )
+        x = (features + positions).flatten(2).transpose(1, 2)
+        x = self.pos_drop(x)
+
+        for block in self.blocks:
+            if self.training and self.gradient_checkpointing:
+                x = torch.utils.checkpoint.checkpoint(block, x, use_reentrant=False)
+            else:
+                x = block(x)
+        return self.norm(x)
+
+    def forward(self, images: torch.Tensor) -> torch.Tensor:
+        return self.forward_features(images)
+
+
 class MathExpressionVisionTransformer(nn.Module):
     """Complete model với regularization"""
+
     def __init__(self, config: Config, vocab_size: int):
         super().__init__()
 
         self.config = config
         self.vocab_size = vocab_size
 
-        # Vision encoder
-        self.vision_encoder = timm.create_model(
-            # 'vit_base_patch16_224.augreg_in21k'
-            # 'vit_small_patch16_224.augreg_in21k'
-            # 'vit_tiny_patch16_224.augreg_in21k'
-            'vit_base_patch16_224.augreg_in21k',
-            pretrained=True,
-            num_classes=0,  # Quan trọng: Bỏ lớp phân loại cuối cùng
-            img_size=config.IMAGE_SIZE,
+        # Share the patch-2 encoder between symbol pretraining and formula training.
+        self.vision_encoder = SharedPatchViTEncoder(config)
+        self.encoder_projection = nn.Identity()
+        self.use_position_auxiliary = bool(
+            getattr(config, "USE_POSITION_AUXILIARY", False)
         )
-        pretrained_embed_dim = self.vision_encoder.embed_dim
-        self.encoder_projection = nn.Linear(pretrained_embed_dim, config.EMBED_DIM)
+        self.position_head = nn.Linear(config.EMBED_DIM, 3)
         # Text decoder - ít layers hơn encoder
         self.text_decoder = TransformerDecoder(
             vocab_size=vocab_size,
@@ -417,17 +535,19 @@ class MathExpressionVisionTransformer(nn.Module):
             mlp_ratio=config.MLP_RATIO,
             dropout=config.DROPOUT,
             attn_dropout=config.ATTENTION_DROPOUT,
-            max_seq_length=config.MAX_SEQ_LENGTH
+            max_seq_length=config.MAX_SEQ_LENGTH,
+            use_coverage=bool(getattr(config, "USE_COVERAGE", False)),
         )
 
     def forward(
-        self,
-        images: torch.Tensor,
-        input_seq: torch.Tensor,
-        tgt_mask: Optional[torch.Tensor] = None,
-        mixup_lambda: Optional[float] = None,
-        mixup_index: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
+            self,
+            images: torch.Tensor,
+            input_seq: torch.Tensor,
+            tgt_mask: Optional[torch.Tensor] = None,
+            mixup_lambda: Optional[float] = None,
+            mixup_index: Optional[torch.Tensor] = None,
+            return_auxiliary: bool = False,
+    ):
         # Apply mixup to images if provided
         if mixup_lambda is not None and mixup_index is not None:
             images = mixup_lambda * images + (1 - mixup_lambda) * images[mixup_index]
@@ -437,22 +557,36 @@ class MathExpressionVisionTransformer(nn.Module):
         encoder_output = self.encoder_projection(encoder_output)
 
         # Decode sequences
-        logits = self.text_decoder(input_seq, encoder_output, tgt_mask)
-
-        return logits
+        if return_auxiliary and self.use_position_auxiliary:
+            logits, hidden = self.text_decoder(
+                input_seq, encoder_output, tgt_mask, return_hidden=True
+            )
+            return logits, self.position_head(hidden)
+        return self.text_decoder(input_seq, encoder_output, tgt_mask)
 
     def generate(
-        self,
-        images: torch.Tensor,
-        sos_token_id: int,
-        eos_token_id: int,
-        max_length: int = 200,
-        temperature: float = 0.8,
-        top_k: int = 50
+            self,
+            images: torch.Tensor,
+            sos_token_id: int,
+            eos_token_id: int,
+            max_length: int = 200,
+            temperature: float = 0.8,
+            top_k: int = 50,
+            enforce_balanced_brackets: bool = False,
+            bracket_pairs: Optional[dict[int, int]] = None,
     ) -> torch.Tensor:
-        """Generate với top-k sampling"""
+        """Generate tokens, optionally enforcing properly nested bracket pairs."""
         batch_size = images.size(0)
         device = images.device
+
+        if enforce_balanced_brackets:
+            if not bracket_pairs:
+                raise ValueError("bracket_pairs is required for balanced-bracket decoding.")
+            close_to_open = {close_id: open_id for open_id, close_id in bracket_pairs.items()}
+            open_ids = set(bracket_pairs)
+            close_ids = set(close_to_open)
+            stacks = [[] for _ in range(batch_size)]
+            finished = [False] * batch_size
 
         # Encode images
         encoder_output = self.vision_encoder.forward_features(images)
@@ -464,15 +598,63 @@ class MathExpressionVisionTransformer(nn.Module):
         for _ in range(max_length - 1):
             # Get logits
             logits = self.text_decoder(generated, encoder_output)
-            next_token_logits = logits[:, -1, :] / temperature
+            next_token_logits = logits[:, -1, :]
+
+            if enforce_balanced_brackets:
+                remaining_slots = max_length - generated.size(1)
+                next_token_logits = next_token_logits.clone()
+                for batch_index, stack in enumerate(stacks):
+                    if finished[batch_index]:
+                        next_token_logits[batch_index].fill_(float("-inf"))
+                        next_token_logits[batch_index, eos_token_id] = 0
+                        continue
+
+                    # A close is legal only when it matches the most recent open.
+                    for close_id, open_id in close_to_open.items():
+                        if not stack or stack[-1] != open_id:
+                            next_token_logits[batch_index, close_id] = float("-inf")
+
+                    if stack:
+                        next_token_logits[batch_index, eos_token_id] = float("-inf")
+                        # Reserve enough output slots to close every open bracket,
+                        # then emit EOS if a slot remains.
+                        if remaining_slots <= len(stack) + 1:
+                            expected_close = bracket_pairs[stack[-1]]
+                            next_token_logits[batch_index].fill_(float("-inf"))
+                            next_token_logits[batch_index, expected_close] = 0
+                        elif remaining_slots <= len(stack) + 2:
+                            for open_id in open_ids:
+                                next_token_logits[batch_index, open_id] = float("-inf")
+                    elif remaining_slots == 1:
+                        # End cleanly when the final generation slot is reached.
+                        next_token_logits[batch_index].fill_(float("-inf"))
+                        next_token_logits[batch_index, eos_token_id] = 0
 
             # Top-k sampling
             if top_k > 0:
+                temp = max(temperature, 1e-5)
+                next_token_logits = next_token_logits / temp
                 indices_to_remove = next_token_logits < torch.topk(next_token_logits, top_k)[0][..., -1, None]
                 next_token_logits[indices_to_remove] = -float('Inf')
 
-            probs = F.softmax(next_token_logits, dim=-1)
-            next_token = torch.multinomial(probs, num_samples=1)
+                probs = F.softmax(next_token_logits, dim=-1)
+                next_token = torch.multinomial(probs, num_samples=1)
+
+            else:
+                next_token = torch.argmax(next_token_logits, dim=-1, keepdim=True)
+
+            if enforce_balanced_brackets:
+                for batch_index, token_tensor in enumerate(next_token[:, 0]):
+                    token_id = int(token_tensor.item())
+                    if finished[batch_index]:
+                        continue
+                    if token_id in open_ids:
+                        stacks[batch_index].append(token_id)
+                    elif token_id in close_ids and stacks[batch_index]:
+                        # Incompatible closes are masked above, so this is safe.
+                        stacks[batch_index].pop()
+                    if token_id == eos_token_id:
+                        finished[batch_index] = True
 
             generated = torch.cat([generated, next_token], dim=1)
 
@@ -480,6 +662,7 @@ class MathExpressionVisionTransformer(nn.Module):
                 break
 
         return generated
+
 
 if __name__ == "__main__":
     # Test model
@@ -494,7 +677,7 @@ if __name__ == "__main__":
 
     print(f"\nTotal parameters: {total_params:,}")
     print(f"Trainable parameters: {trainable_params:,}")
-    print(f"Model size: {total_params * 4 / 1024**2:.2f} MB (float32)")
+    print(f"Model size: {total_params * 4 / 1024 ** 2:.2f} MB (float32)")
 
     # Test forward pass
     images = torch.randn(4, 3, config.IMAGE_SIZE, config.IMAGE_SIZE)
@@ -505,4 +688,5 @@ if __name__ == "__main__":
 
     # Memory usage estimation
     print(f"\nEstimated memory per batch:")
-    print(f"Batch size {config.BATCH_SIZE}: ~{(total_params * 4 + config.BATCH_SIZE * 3 * config.IMAGE_SIZE * config.IMAGE_SIZE * 4) / 1024**3:.2f} GB")
+    print(
+        f"Batch size {config.BATCH_SIZE}: ~{(total_params * 4 + config.BATCH_SIZE * 3 * config.IMAGE_SIZE * config.IMAGE_SIZE * 4) / 1024 ** 3:.2f} GB")

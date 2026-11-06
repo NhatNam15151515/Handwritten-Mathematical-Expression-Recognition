@@ -4,10 +4,10 @@ Hệ thống nhận dạng biểu thức toán học viết tay, được xây d
 
 ## Tính năng chính
 
--   **Pre-trained Vision Transformer**: Sử dụng mô hình `vit-small-patch16-224` đã được huấn luyện trước trên ImageNet-21k làm bộ mã hóa (encoder), giúp trích xuất đặc trưng hình ảnh mạnh mẽ.
+-   **Vision Transformer patch-2**: khởi tạo encoder từ classifier ký tự đơn, tiếp tục học chuỗi ký tự nhìn thấy, rồi fine-tune trên công thức đầy đủ.
 -   **Transformer Decoder**: Sinh ra chuỗi LaTeX từ các đặc trưng hình ảnh đã được mã hóa.
 -   **Data Augmentation**: Tích hợp các kỹ thuật tăng cường dữ liệu on-the-fly (xoay, thay đổi độ sáng/tương phản) để cải thiện độ bền của mô hình.
--   **Preprocessing Pipeline**: Cung cấp một pipeline tiền xử lý hiệu quả để chuẩn hóa và làm sạch dữ liệu đầu vào.
+-   **Dữ liệu CROHME**: Tiền xử lý ảnh trước khi train; giữ nguyên tỉ lệ và không resize trong vòng lặp huấn luyện.
 -   **Beam Search Inference**: Tùy chọn sử dụng beam search để cải thiện chất lượng của chuỗi LaTeX được sinh ra.
 -   **Evaluation Metrics**: Đánh giá hiệu suất mô hình bằng các độ đo phổ biến như BLEU score và Edit Distance.
 
@@ -15,7 +15,8 @@ Hệ thống nhận dạng biểu thức toán học viết tay, được xây d
 
 ```
 .
-├── data/                     # Dữ liệu train_test
+├── formula_symbol_training/  # Stage chuỗi ký hiệu và dữ liệu CROHME dùng chung
+├── single_symbol_training/   # Stage classifier ký tự đơn và dữ liệu đã xử lý
 ├── config.py                 # File cấu hình tập trung cho toàn bộ dự án
 ├── dataset.py                # Định nghĩa Dataset class và DataLoader
 ├── debug_check_labels.py     # (Dev) Script kiểm tra nhãn dữ liệu
@@ -37,7 +38,7 @@ Hệ thống nhận dạng biểu thức toán học viết tay, được xây d
 
 ## Quy trình làm việc (Workflow)
 
-Quy trình chuẩn để huấn luyện và sử dụng mô hình được chia thành 3 bước chính:
+Quy trình huấn luyện hiện gồm ba giai đoạn. Hai giai đoạn đầu có source riêng; giai đoạn cuối dùng `train.py` ở thư mục gốc.
 
 ### 1. Cài đặt Môi trường
 
@@ -48,26 +49,34 @@ Quy trình chuẩn để huấn luyện và sử dụng mô hình được chia 
 pip install -r requirements.txt
 ```
 
-### 2. Tiền xử lý Dữ liệu
+### 2. Dữ liệu
 
-Trước khi huấn luyện, tất cả các ảnh trong bộ dữ liệu cần được xử lý (binarize, resize, padding) để đưa về một định dạng chuẩn. Quá trình này giúp tăng tốc độ training một cách đáng kể vì các tác vụ nặng đã được thực hiện trước.
+Pipeline dùng dữ liệu ký tự đơn trong `single_symbol_training/data/` và CROHME trong `formula_symbol_training/data/crohme_whywhs_source/`. Trước khi train, chạy `prepare_formula_data.py` để đảo nền và giới hạn cạnh dài tối đa 448 px, giữ nguyên tỉ lệ ảnh. Train đọc các ảnh đã xử lý, không resize trong lúc học. Tập train được chia cố định thành train/validation, còn 986 ảnh test được giữ riêng.
 
-Quy trình này đã được tôi chuẩn bị trước, chỉ cần giải nén tệp data_processed.zip
+Lưu ý giấy phép: điều khoản CROHME hiện ghi dữ liệu chỉ dành cho nghiên cứu, không dùng thương mại. Cần xin quyền riêng trước khi đưa mô hình hoặc dữ liệu này vào sản phẩm thương mại.
 
 ### 3. Huấn luyện Mô hình
 
 Bây giờ bạn có thể bắt đầu quá trình huấn luyện.
 
-```bash
-# Bắt đầu training, Dataloader sẽ đọc trực tiếp từ thư mục *_processed/
-python train.py
+```powershell
+# Giai đoạn 1: classifier ký tự đơn patch 2 (nếu cần train lại)
+.\.venv\Scripts\python.exe -m single_symbol_training.train --epochs 1000
+
+# Giai đoạn 2: học chuỗi ký tự nhìn thấy trong ảnh công thức
+.\.venv\Scripts\python.exe -m formula_symbol_training.train --epochs 150 --patience 15
+
+# Giai đoạn 3: học chuỗi LaTeX đầy đủ; mặc định nạp encoder patch 2 từ stage 2
+.\.venv\Scripts\python.exe train.py --stage formula --epochs 150
 ```
+
+Giai đoạn 3 nạp `vision_encoder_state_dict` từ checkpoint sinh chuỗi tốt nhất `formula_symbol_training/checkpoints/vit_patch2_formula_symbols_grid44/best_generation.pth`; decoder LaTeX được khởi tạo mới vì vocab chuỗi ký hiệu phẳng khác vocab LaTeX đầy đủ. Stage này train trên caption LaTeX gốc, thêm loss phụ dự đoán vai trò main/superscript/subscript từ cú pháp caption, cùng coverage attention lấy cảm hứng từ CoMER. Checkpoint, log và output được lưu theo run `vit_patch2_grid44_full_formula_position_coverage` trong các thư mục tương ứng.
 
 -   **Theo dõi quá trình training**: Sử dụng TensorBoard để xem các biểu đồ loss, accuracy, và learning rate.
     ```bash
     tensorboard --logdir logs
     ```
--   Checkpoints của mô hình sẽ được tự động lưu vào thư mục `checkpoints/`.
+-   Checkpoints stage 1 và 2 nằm trong source tương ứng; stage 3 lưu tại `checkpoints/vit_patch2_grid44_full_formula_position_coverage/`.
 
 ## Inference (Dự đoán)
 
@@ -79,18 +88,20 @@ tệp best_91_base là tệp tốt nhất
 ### Nhận dạng trên một ảnh đơn lẻ
 
 ```bash
-python inference.py --checkpoint checkpoints/best.pth --image path/to/your/image.png
+python inference.py --checkpoint checkpoints/vit_patch2_grid44_full_formula_position_coverage/best.pth --image path/to/your/image.png --balance-brackets
 ```
 
 ### Đánh giá trên toàn bộ tập Test
 
 ```bash
-python inference.py --checkpoint checkpoints/best.pth --evaluate
+python inference.py --checkpoint checkpoints/vit_patch2_grid44_full_formula_position_coverage/best.pth --evaluate
 ```
 
 ## ⚙️ Tùy chỉnh và Cấu hình
 
 Toàn bộ các tham số quan trọng của mô hình và quá trình huấn luyện được quản lý tập trung tại `config.py`. Bạn có thể dễ dàng thay đổi các giá trị như:
+
+-   Encoder full-formula dùng patch 2, ảnh tiền xử lý tối đa 448 px và lưới đặc trưng tối đa 44×44. Checkpoint patch 4 không tương thích. Giai đoạn cuối khởi tạo encoder từ checkpoint patch-2 của stage chuỗi ký hiệu; decoder và optimizer bắt đầu mới.
 
 -   `IMAGE_SIZE`, `PATCH_SIZE`
 -   `EMBED_DIM`, `ENCODER_LAYERS`, `DECODER_LAYERS`

@@ -1,21 +1,27 @@
 # Python cache
 __pycache__/
+.venv/
+venv/
 
 # Checkpoints, logs, outputs
+**/checkpoints/
+**/logs/
+**/outputs/
 checkpoints/*.pth
 checkpoints/*.pt
 checkpoints/*.ckpt
 checkpoints/*.zip
+checkpoints/**/*.pth
+checkpoints/**/*.pt
+checkpoints/**/*.ckpt
 logs/
 outputs/
 
-# Dữ liệu
-data/test_processed/
-data/train_processed/
-data/val_processed
-data/test_image
-data/train_image
-data/val_image
+# Dữ liệu cục bộ, không commit ảnh/array huấn luyện
+data/crohme_whywhs_source/
+data/single_symbol_native/
+formula_symbol_training/data/
+single_symbol_training/data/
 # Folder giấy tờ / tài liệu
 paper/
 
